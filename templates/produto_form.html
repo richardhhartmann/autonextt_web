@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}{% if produto %}Editar Produto{% else %}Cadastrar Produto{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">
+        {% if produto %}Editar Produto #{{ produto.prd_codigo }}{% else %}Cadastrar Novo Produto{% endif %}
+    </h1>
+
+    <form id="form-produto" action="{{ url_for('editar_produto', sec_codigo=produto.sec_codigo, esp_codigo=produto.esp_codigo, prd_codigo=produto.prd_codigo) if produto else url_for('cadastrar_produto') }}" method="POST">
+        <!-- Campos Chave -->
+        <input type="hidden" name="prd_data_cadastro" value="{{ produto.prd_data_cadastro.strftime('%Y-%m-%d') if produto and produto.prd_data_cadastro else '' }}">
+        
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Informações Principais</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <label for="sec_codigo" class="block text-sm font-medium text-gray-700">Seção*</label>
+                    <input type="number" name="sec_codigo" id="sec_codigo" value="{{ produto.sec_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
+                </div>
+                <div>
+                    <label for="esp_codigo" class="block text-sm font-medium text-gray-700">Espécie*</label>
+                    <input type="number" name="esp_codigo" id="esp_codigo" value="{{ produto.esp_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
+                </div>
+                 <div>
+                    <label for="prd_codigo" class="block text-sm font-medium text-gray-700">Produto Cód.*</label>
+                    <input type="number" name="prd_codigo" id="prd_codigo" value="{{ produto.prd_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
+                </div>
+                <div class="lg:col-span-2">
+                    <label for="prd_descricao" class="block text-sm font-medium text-gray-700">Descrição*</label>
+                    <input type="text" name="prd_descricao" value="{{ produto.prd_descricao if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                 <div>
+                    <label for="mar_codigo" class="block text-sm font-medium text-gray-700">Marca*</label>
+                    <select name="mar_codigo" id="mar_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">Selecione...</option>
+                        {% for m in marcas %}
+                        <option value="{{ m.mar_codigo }}" {% if produto and m.mar_codigo == produto.mar_codigo %}selected{% endif %}>{{ m.mar_descricao }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="prd_referencia_fornec" class="block text-sm font-medium text-gray-700">Referência</label>
+                    <input type="text" name="prd_referencia_fornec" value="{{ produto.prd_referencia_fornec if produto else '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                 <div class="flex items-center mt-6">
+                    <input id="prd_ativo" name="prd_ativo" type="checkbox" {% if not produto or produto.prd_ativo %}checked{% endif %} value="1" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                    <label for="prd_ativo" class="ml-2 block text-sm text-gray-900">Ativo</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção da Grade de Itens -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+             <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Grade de Itens (Cor, Tamanho, etc.)</h2>
+             <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end p-4 border rounded-lg mb-4 bg-gray-50">
+                <div>
+                    <label for="item-ipr-codigo" class="block text-sm font-medium text-gray-700">Cód. Item (ipr)*</label>
+                    <input type="number" id="item-ipr-codigo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="item-codigo-barra" class="block text-sm font-medium text-gray-700">Código de Barras</label>
+                    <input type="text" id="item-codigo-barra" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="item-preco-promo" class="block text-sm font-medium text-gray-700">Preço Promocional</label>
+                    <input type="number" step="0.01" id="item-preco-promo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <button type="button" id="add-grade-item-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Adicionar à Grade</button>
+                </div>
+             </div>
+             <div class="overflow-x-auto">
+                <table class="min-w-full leading-normal">
+                    <thead>
+                        <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">
+                            <th class="px-5 py-3">Cód. Item</th>
+                            <th class="px-5 py-3">Cód. Barras</th>
+                            <th class="px-5 py-3">Preço Promo</th>
+                            <th class="px-5 py-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="grade-table-body"></tbody>
+                </table>
+             </div>
+             <input type="hidden" name="itens_grade_json" id="itens_grade_json">
+        </div>
+
+        <div class="mt-8 pt-5 border-t border-gray-200 flex justify-end gap-4">
+            <a href="{{ url_for('visualizar_produtos') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancelar</a>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                {% if produto %}Atualizar Produto{% else %}Salvar Produto{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const iprCodigoInput = document.getElementById('item-ipr-codigo');
+    const codigoBarraInput = document.getElementById('item-codigo-barra');
+    const precoPromoInput = document.getElementById('item-preco-promo');
+    const addBtn = document.getElementById('add-grade-item-btn');
+    const tableBody = document.getElementById('grade-table-body');
+    const form = document.getElementById('form-produto');
+    const hiddenJsonInput = document.getElementById('itens_grade_json');
+
+    let itensDaGrade = JSON.parse({{ itens_grade | safe }});
+
+    function renderizarTabelaGrade() {
+        tableBody.innerHTML = '';
+        itensDaGrade.forEach(item => {
+            const row = document.createElement('tr');
+            row.classList.add('border-b', 'border-gray-200');
+            row.innerHTML = `
+                <td class="px-5 py-4 text-sm">${item.ipr_codigo}</td>
+                <td class="px-5 py-4 text-sm">${item.ipr_codigo_barra || ''}</td>
+                <td class="px-5 py-4 text-sm">${item.ipr_preco_promocional != null ? 'R$ ' + parseFloat(item.ipr_preco_promocional).toFixed(2) : ''}</td>
+                <td class="px-5 py-4 text-sm">
+                    <button type="button" onclick="removerItemGrade(${item.ipr_codigo})" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+        hiddenJsonInput.value = JSON.stringify(itensDaGrade);
+    }
+
+    addBtn.addEventListener('click', function() {
+        const ipr_codigo = parseInt(iprCodigoInput.value);
+        if (isNaN(ipr_codigo)) {
+            alert('O Código do Item (ipr) é obrigatório e deve ser um número.');
+            return;
+        }
+        if (itensDaGrade.find(i => i.ipr_codigo === ipr_codigo)) {
+            alert('Este código de item já foi adicionado à grade.');
+            return;
+        }
+
+        const newItem = {
+            ipr_codigo: ipr_codigo,
+            ipr_codigo_barra: codigoBarraInput.value,
+            ipr_preco_promocional: precoPromoInput.value ? parseFloat(precoPromoInput.value) : null
+        };
+        
+        itensDaGrade.push(newItem);
+        renderizarTabelaGrade();
+        
+        iprCodigoInput.value = '';
+        codigoBarraInput.value = '';
+        precoPromoInput.value = '';
+    });
+
+    window.removerItemGrade = function(ipr_codigo) {
+        itensDaGrade = itensDaGrade.filter(item => item.ipr_codigo !== ipr_codigo);
+        renderizarTabelaGrade();
+    }
+
+    form.addEventListener('submit', function(e) {
+        hiddenJsonInput.value = JSON.stringify(itensDaGrade);
+        if (itensDaGrade.length === 0) {
+            e.preventDefault();
+            alert('O produto deve ter pelo menos um item na grade.');
+            return;
+        }
+    });
+
+    renderizarTabelaGrade();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,573 @@
+{% extends "base.html" %}
+
+{% block title %}{% if pedido %}Editar Pedido{% else %}Cadastrar Pedido{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">
+        {% if pedido %}Editar Pedido #{{ pedido.ped_codigo }}{% else %}Cadastrar Novo Pedido{% endif %}
+    </h1>
+
+    <form id="form-pedido" action="{{ url_for('editar_pedido', ped_codigo=pedido.ped_codigo) if pedido else url_for('cadastrar_pedido') }}" method="POST">
+        <input type="hidden" name="ped_codigo" value="{{ pedido.ped_codigo if pedido else '' }}">
+        <input type="hidden" name="ped_qtde_entregue_total" value="{{ pedido.ped_qtde_entregue_total if pedido else 0 }}">
+        {% if pedido %}
+        <input type="hidden" name="ped_data_emissao" value="{{ pedido.ped_data_emissao.strftime('%Y-%m-%d') if pedido.ped_data_emissao }}">
+        <input type="hidden" name="ped_status" value="{{ pedido.ped_status }}">
+        {% endif %}
+
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Informações do Pedido</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <label for="pes_codigo" class="block text-sm font-medium text-gray-700">Fornecedor*</label>
+                    <select name="pes_codigo" id="pes_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Selecione...</option>
+                        {% for f in fornecedores %}
+                        <option value="{{ f.pes_codigo }}" {% if pedido and f.pes_codigo == pedido.pes_codigo %}selected{% endif %}>{{ f.pju_razao_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="usu_codigo_comprador" class="block text-sm font-medium text-gray-700">Comprador*</label>
+                    <select name="usu_codigo_comprador" id="usu_codigo_comprador" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">Selecione...</option>
+                        {% for c in compradores %}
+                        <option value="{{ c.usu_codigo }}" {% if pedido and c.usu_codigo == pedido.usu_codigo_comprador %}selected{% endif %}>{{ c.usu_login }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                 <div>
+                    <label for="cpg_codigo" class="block text-sm font-medium text-gray-700">Cond. Pagamento</label>
+                    <input type="number" name="cpg_codigo" id="cpg_codigo" value="{{ pedido.cpg_codigo if pedido else '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div class="lg:col-span-3">
+                    <label for="ped_data_entrega_inicial" class="block text-sm font-medium text-gray-700">Período de Entrega*</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="date" name="ped_data_entrega_inicial" id="ped_data_entrega_inicial" value="{{ pedido.ped_data_entrega_inicial.strftime('%Y-%m-%d') if pedido and pedido.ped_data_entrega_inicial }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <span>até</span>
+                        <input type="date" name="ped_data_entrega_final" id="ped_data_entrega_final" value="{{ pedido.ped_data_entrega_final.strftime('%Y-%m-%d') if pedido and pedido.ped_data_entrega_final }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    </div>
+                </div>
+                <div class="lg:col-span-3">
+                    <label for="ped_observacao" class="block text-sm font-medium text-gray-700">Observação</label>
+                    <textarea name="ped_observacao" id="ped_observacao" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">{{ pedido.ped_observacao if pedido else '' }}</textarea>
+                </div>
+                <input type="hidden" name="ped_qtde_total" id="ped_qtde_total" value="{{ pedido.ped_qtde_total if pedido else 0 }}">
+                <input type="hidden" name="ped_valor_total" id="ped_valor_total" value="{{ pedido.ped_valor_total if pedido else 0 }}">
+                <input type="hidden" name="ped_custo_medio" id="ped_custo_medio" value="{{ pedido.ped_custo_medio if pedido else 0 }}">
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Itens do Pedido</h2>
+            <div class="p-4 border rounded-lg mb-4 bg-gray-50">
+                 <div class="mb-4">
+                    <label for="product-search" class="block text-sm font-medium text-gray-700">Buscar Produto para Adicionar</label>
+                    <input type="text" id="product-search" placeholder="Digite o código, descrição, etc..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                    <div class="lg:col-span-2">
+                        <label for="product-multiselect" class="block text-sm font-medium text-gray-700">Selecionar Produtos (use Ctrl/Cmd para múltiplos)</label>
+                        <select id="product-multiselect" multiple class="mt-1 block w-full rounded-md border-gray-300 shadow-sm h-32">
+                            {% for p in produtos %}
+                            <option value="{{ p.full_code }}" 
+                                    data-prd="{{ p.prd_codigo }}" 
+                                    data-sec="{{ p.sec_codigo }}" 
+                                    data-esp="{{ p.esp_codigo }}"
+                                    data-custo="{{ p.prd_ultimo_custo | default(0.0, true) }}">
+                                {{ p.full_code }} | {{ p.prd_descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="lg:col-span-1 flex flex-col justify-start h-full">
+                        <label class="block text-sm font-medium text-gray-700">&nbsp;</label>
+                        <button type="button" id="add-item-btn" class="w-full mt-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md">Adicionar Selecionados</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-100">
+                        <tr class="border-b-2 border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            <th class="px-5 py-3">Produto / Pack / Filial</th>
+                            <th class="px-5 py-3">Peças/Pack</th>
+                            <th class="px-5 py-3">Qtd. Packs</th>
+                            <th class="px-5 py-3">Custo Unit.</th>
+                            <th class="px-5 py-3">Total Peças</th>
+                            <th class="px-5 py-3">Subtotal</th>
+                            <th class="px-5 py-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itens-table-body" class="leading-normal">
+                        </tbody>
+                </table>
+            </div>
+            <input type="hidden" name="itens_pedido_json" id="itens_pedido_json">
+        </div>
+
+        <div class="mt-8 pt-5 border-t border-gray-200 flex justify-end gap-4">
+            <a href="{{ url_for('visualizar_pedidos') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancelar</a>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                {% if pedido %}Atualizar Pedido{% else %}Salvar Pedido{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<div id="grade-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center border-b pb-3">
+            <h3 class="text-2xl font-bold text-gray-800" id="modal-product-title">Molde do Pack</h3>
+            <div class="cursor-pointer z-50" id="close-modal-btn">
+                <i class="fas fa-times fa-lg text-gray-600 hover:text-gray-900"></i>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <div id="pack-content" class="mt-4"></div>
+        </div>
+
+        <div class="mt-8 pt-5 border-t flex justify-end gap-4">
+             <button id="cancel-modal-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                Cancelar
+            </button>
+            <button id="save-grade-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                Salvar Molde do Pack
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- ELEMENTOS DO DOM ---
+    const productSearchInput = document.getElementById('product-search');
+    const productMultiSelect = document.getElementById('product-multiselect');
+    const addItemBtn = document.getElementById('add-item-btn');
+    const itensTableBody = document.getElementById('itens-table-body');
+    const form = document.getElementById('form-pedido');
+    const hiddenJsonInput = document.getElementById('itens_pedido_json');
+    
+    // Modal
+    const gradeModal = document.getElementById('grade-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const cancelModalBtn = document.getElementById('cancel-modal-btn');
+    const saveGradeBtn = document.getElementById('save-grade-btn');
+    const packContentContainer = document.getElementById('pack-content');
+    const modalProductTitle = document.getElementById('modal-product-title');
+
+    // --- ESTADO DA APLICAÇÃO ---
+    let itensDoPedido = [];
+    let modalState = {
+        productIndex: null,
+        packIndex: null,
+        gradeDetails: {}
+    };
+    
+    const produtosMap = new Map();
+    {% for p in produtos %}
+        produtosMap.set('{{ p.full_code }}', {
+            descricao: `{{ p.prd_descricao | e }}`,
+            sec: parseInt('{{ p.sec_codigo }}'),
+            esp: parseInt('{{ p.esp_codigo }}'),
+            prd: parseInt('{{ p.prd_codigo }}'),
+            custo: parseFloat('{{ p.prd_ultimo_custo | default(0.0, true) }}')
+        });
+    {% endfor %}
+
+    const filiais = [
+        {% for f in filiais %}{ fil_codigo: {{ f.fil_codigo }}, fil_descricao: `{{ f.fil_descricao | e }}` },{% endfor %}
+    ];
+
+    // --- LÓGICA PRINCIPAL ---
+
+    function addProductItems() {
+        const selectedOptions = Array.from(productMultiSelect.selectedOptions);
+        selectedOptions.forEach(option => {
+            const fullCode = option.value;
+            if (itensDoPedido.some(item => item.full_code === fullCode)) return;
+
+            const produtoInfo = produtosMap.get(fullCode);
+            if (!produtoInfo) return;
+
+            const newItem = {
+                full_code: fullCode,
+                ...produtoInfo,
+                custo: 0.00,
+                packs: [] // Packs começarão vazios
+            };
+            addNewPackToProduct(newItem); // Adiciona o primeiro pack por padrão
+            itensDoPedido.push(newItem);
+        });
+        renderizarTabela();
+        productMultiSelect.selectedIndex = -1;
+    }
+
+    function addNewPackToProduct(product) {
+        const newPackNum = product.packs.length + 1;
+        const newPack = {
+            pack_num: newPackNum,
+            gradeDetails: null, // O molde da grade começa nulo
+            filialDistribution: {} // { fil_codigo: qtd_packs }
+        };
+        filiais.forEach(f => {
+            newPack.filialDistribution[f.fil_codigo] = 0;
+        });
+        product.packs.push(newPack);
+    }
+
+    function renderizarTabela() {
+        itensTableBody.innerHTML = '';
+        if (itensDoPedido.length === 0) {
+            itensTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500">Nenhum produto adicionado.</td></tr>`;
+            return;
+        }
+
+        itensDoPedido.forEach((item, productIndex) => {
+            // --- Linha Principal do Produto ---
+            const totalPacksProduto = item.packs.reduce((sum, pack) => {
+                return sum + Object.values(pack.filialDistribution).reduce((packSum, qty) => packSum + qty, 0);
+            }, 0);
+
+            let totalPecasProduto = 0;
+            item.packs.forEach(pack => {
+                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+                const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + qty, 0);
+                totalPecasProduto += pecasPorPack * qtdPacks;
+            });
+            const subtotalProduto = totalPecasProduto * item.custo;
+
+            const productRow = document.createElement('tr');
+            productRow.className = 'bg-gray-100 border-b-2 border-gray-300 font-semibold text-gray-800';
+            productRow.innerHTML = `
+                <td class="px-5 py-3 text-sm">
+                    ${item.full_code} - ${item.descricao}
+                </td>
+                <td class="px-5 py-3"></td>
+                <td class="px-5 py-3 text-center">${totalPacksProduto}</td>
+                <td class="px-5 py-3">
+                    <input type="text" class="cost-input mt-1 block w-24 rounded-md border-gray-300 shadow-sm" data-product-index="${productIndex}" value="R$ ${(item.custo || 0).toFixed(2).replace('.', ',')}" placeholder="R$ 0,00">
+                </td>
+                <td class="px-5 py-3 text-center font-bold">${totalPecasProduto}</td>
+                <td class="px-5 py-3 text-center font-bold">R$ ${subtotalProduto.toFixed(2).replace('.', ',')}</td>
+                <td class="px-5 py-3 text-center">
+                    <button type="button" class="add-new-pack-btn text-green-600 hover:text-green-800" title="Adicionar Novo Pack" data-product-index="${productIndex}">
+                        <i class="fas fa-plus-circle fa-lg"></i>
+                    </button>
+                    <button type="button" class="remove-product-btn text-red-600 hover:text-red-800 ml-3" title="Remover Produto" data-product-index="${productIndex}">
+                        <i class="fas fa-times-circle fa-lg"></i>
+                    </button>
+                </td>
+            `;
+            itensTableBody.appendChild(productRow);
+
+            // --- Linhas dos Packs e Filiais ---
+            if (item.packs.length === 0) {
+                 const noPackRow = document.createElement('tr');
+                 noPackRow.innerHTML = `<td colspan="7" class="pl-10 py-2 text-gray-500">Clique em '+' para adicionar o primeiro pack.</td>`;
+                 itensTableBody.appendChild(noPackRow);
+            }
+
+            item.packs.forEach((pack, packIndex) => {
+                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+                const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + qty, 0);
+                const subtotalPack = pecasPorPack * qtdPacks * item.custo;
+
+                const packRow = document.createElement('tr');
+                packRow.className = 'border-b border-gray-200 bg-blue-50';
+                packRow.innerHTML = `
+                    <td class="pl-8 pr-5 py-2 text-sm font-medium">↳ Pack ${pack.pack_num}</td>
+                    <td class="px-5 py-2 text-center">${pecasPorPack}</td>
+                    <td class="px-5 py-2 text-center">${qtdPacks}</td>
+                    <td class="px-5 py-2"></td>
+                    <td class="px-5 py-2 text-center">${pecasPorPack * qtdPacks}</td>
+                    <td class="px-5 py-2 text-center">R$ ${subtotalPack.toFixed(2).replace('.', ',')}</td>
+                    <td class="px-5 py-2 text-center">
+                        <button type="button" class="open-grade-modal-btn text-teal-600 hover:text-teal-900" title="Definir Molde do Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button type="button" class="delete-pack-btn text-red-600 hover:text-red-800 ml-3" title="Apagar Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}">
+                             <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                itensTableBody.appendChild(packRow);
+
+                const filialRow = document.createElement('tr');
+                filialRow.className = 'border-b border-gray-200';
+                let filialCells = `<td class="pl-16 pr-5 py-3 text-sm text-gray-600" colspan="2">↳ Distribuição (Qtd. Packs):</td>`;
+                filiais.forEach(f => {
+                    filialCells += `
+                        <td class="px-2 py-1 text-center">
+                            <label class="text-xs font-semibold">${f.fil_descricao}</label>
+                            <input type="number" min="0" value="${pack.filialDistribution[f.fil_codigo] || 0}" 
+                                class="filial-dist-input mt-1 block w-full rounded-md border-gray-300 shadow-sm" 
+                                data-product-index="${productIndex}" data-pack-index="${packIndex}" data-filial-codigo="${f.fil_codigo}">
+                        </td>
+                    `;
+                });
+                filialRow.innerHTML = filialCells + `<td colspan="${7 - filiais.length - 2}"></td>`;
+                itensTableBody.appendChild(filialRow);
+            });
+        });
+        atualizarTotaisEJson();
+    }
+
+    function getPiecesPerPack(gradeDetails) {
+        if (!gradeDetails) return 0;
+        return Object.values(gradeDetails.grade).reduce((sum, tamanhos) => {
+            return sum + Object.values(tamanhos).reduce((rowSum, qty) => rowSum + qty, 0);
+        }, 0);
+    }
+
+    function atualizarTotaisEJson() {
+        let qtdeTotalGeral = 0;
+        let valorTotalGeral = 0;
+        const flatItensList = [];
+
+        itensDoPedido.forEach(item => {
+            let qtdeTotalProduto = 0;
+            item.packs.forEach(pack => {
+                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+                Object.entries(pack.filialDistribution).forEach(([filialCodigo, qtdPacks]) => {
+                    const quantidadePecas = pecasPorPack * qtdPacks;
+                    if (quantidadePecas > 0) {
+                        qtdeTotalProduto += quantidadePecas;
+                        // O JSON enviado ao backend pode precisar de uma estrutura mais complexa
+                        // Por agora, vamos achatá-lo como o backend espera
+                         flatItensList.push({
+                            prd_codigo: item.prd, sec_codigo: item.sec, esp_codigo: item.esp,
+                            ipr_codigo: pack.pack_num, // Usando pack_num como ipr_codigo
+                            custo: item.custo,
+                            fil_codigo: parseInt(filialCodigo), 
+                            quantidade: quantidadePecas
+                        });
+                    }
+                });
+            });
+            valorTotalGeral += qtdeTotalProduto * item.custo;
+            qtdeTotalGeral += qtdeTotalProduto;
+        });
+
+        document.getElementById('ped_qtde_total').value = qtdeTotalGeral;
+        document.getElementById('ped_valor_total').value = valorTotalGeral.toFixed(2);
+        document.getElementById('ped_custo_medio').value = (qtdeTotalGeral > 0 ? valorTotalGeral / qtdeTotalGeral : 0).toFixed(2);
+        hiddenJsonInput.value = JSON.stringify(flatItensList);
+    }
+    
+    // --- LÓGICA DO MODAL ---
+    async function openGradeModal(productIndex, packIndex) {
+        modalState.productIndex = productIndex;
+        modalState.packIndex = packIndex;
+        const product = itensDoPedido[productIndex];
+        const pack = product.packs[packIndex];
+
+        modalProductTitle.textContent = `Molde do Pack ${pack.pack_num} - ${product.descricao}`;
+
+        try {
+            const response = await fetch(`/api/produto/grade/${product.sec}/${product.esp}/${product.prd}`);
+            if (!response.ok) throw new Error('Falha ao buscar grade do produto.');
+            
+            const apiGradeData = await response.json();
+            loadOrInitializeModalState(pack, apiGradeData);
+            renderModalContent();
+            
+            gradeModal.classList.remove('hidden');
+
+        } catch (error) {
+            alert(error.message);
+            console.error(error);
+        }
+    }
+
+    function loadOrInitializeModalState(pack, apiGradeData) {
+        if (pack.gradeDetails) {
+            modalState.gradeDetails = JSON.parse(JSON.stringify(pack.gradeDetails));
+            // Reconciliar
+            modalState.gradeDetails.cores = apiGradeData.cores;
+            modalState.gradeDetails.tamanhos = apiGradeData.tamanhos;
+        } else {
+            modalState.gradeDetails = {
+                cores: apiGradeData.cores,
+                tamanhos: apiGradeData.tamanhos,
+                multiplicadores: {},
+                grade: {}
+            };
+            apiGradeData.cores.forEach(cor => {
+                modalState.gradeDetails.multiplicadores[cor] = 1;
+                modalState.gradeDetails.grade[cor] = {};
+                apiGradeData.tamanhos.forEach(tamanho => {
+                    modalState.gradeDetails.grade[cor][tamanho] = 0;
+                });
+            });
+        }
+    }
+    
+    function renderModalContent() {
+        packContentContainer.innerHTML = '';
+        const { cores, tamanhos, grade, multiplicadores } = modalState.gradeDetails;
+
+        if (!cores || cores.length === 0 || !tamanhos || tamanhos.length === 0) {
+            packContentContainer.innerHTML = `<p class="text-center text-gray-500">Este produto não possui atributos de Cor e Tamanho cadastrados.</p>`;
+            return;
+        }
+
+        let grandTotal = 0;
+        // --- CABEÇALHO DA TABELA (COM ORDEM AJUSTADA) ---
+        let tableHTML = `<table class="min-w-full text-center border">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border p-2">Cor/Tamanho</th>`;
+        
+        // 1. Adiciona as colunas de Tamanho PRIMEIRO
+        tamanhos.forEach(tamanho => { tableHTML += `<th class="border p-2">${tamanho}</th>`; });
+        
+        // 2. Adiciona a coluna Multiplicador DEPOIS dos tamanhos
+        tableHTML += `<th class="border p-2">Multiplicador</th>`;
+        
+        // 3. Adiciona a coluna Total
+        tableHTML += `<th class="border p-2">Total</th></tr></thead><tbody>`;
+
+        // --- CORPO DA TABELA (COM ORDEM AJUSTADA) ---
+        cores.forEach(cor => {
+            let rowTotal = 0;
+            const multiplicador = multiplicadores[cor] || 1;
+            tableHTML += `<tr class="border-b">
+                <td class="font-semibold p-2 border-r">${cor}</td>`;
+            
+            // 1. Adiciona as caixas de quantidade de Tamanho PRIMEIRO
+            tamanhos.forEach(tamanho => {
+                const qty = (grade[cor] && grade[cor][tamanho] !== undefined) ? grade[cor][tamanho] : 0;
+                rowTotal += qty * multiplicador;
+                tableHTML += `<td class="p-1 border-r"><input type="number" min="0" value="${qty}" class="w-16 text-center border rounded-md grade-qty-input" data-cor="${cor}" data-tamanho="${tamanho}"></td>`;
+            });
+
+            // 2. Adiciona a caixa do Multiplicador DEPOIS dos tamanhos
+            tableHTML += `
+                <td class="p-1 border-r">
+                    <input type="number" min="1" value="${multiplicador}" class="w-20 text-center border rounded-md multiplier-input" data-cor="${cor}">
+                </td>`;
+
+            // 3. Adiciona a célula de Total da linha
+            tableHTML += `<td class="font-bold p-2">${rowTotal}</td></tr>`;
+            grandTotal += rowTotal;
+        });
+
+        // --- RODAPÉ DA TABELA (colspan não precisa de mudança) ---
+        tableHTML += `</tbody><tfoot class="bg-gray-100 font-bold"><tr class="border-t-2">
+            <td colspan="${2 + tamanhos.length}" class="text-right p-2">Total de Peças no Pack:</td>
+            <td class="p-2">${grandTotal}</td>
+        </tr></tfoot></table>`;
+        packContentContainer.innerHTML = tableHTML;
+    }
+
+    function hideModal() {
+        gradeModal.classList.add('hidden');
+        modalState = {};
+    }
+
+    // --- EVENT LISTENERS ---
+    addItemBtn.addEventListener('click', addProductItems);
+    productSearchInput.addEventListener('keyup', function() {
+        const searchTerm = this.value.toLowerCase();
+        Array.from(productMultiSelect.options).forEach(option => {
+            option.style.display = option.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+        });
+    });
+
+    itensTableBody.addEventListener('click', (e) => {
+        // Remover produto
+        let btn = e.target.closest('.remove-product-btn');
+        if (btn) {
+            itensDoPedido.splice(btn.dataset.productIndex, 1);
+            renderizarTabela();
+            return;
+        }
+        // Adicionar pack
+        btn = e.target.closest('.add-new-pack-btn');
+        if (btn) {
+            addNewPackToProduct(itensDoPedido[btn.dataset.productIndex]);
+            renderizarTabela();
+            return;
+        }
+        // Apagar pack
+        btn = e.target.closest('.delete-pack-btn');
+        if (btn) {
+            const product = itensDoPedido[btn.dataset.productIndex];
+            if (product.packs.length > 1) {
+                product.packs.splice(btn.dataset.packIndex, 1);
+                // Renumerar packs
+                product.packs.forEach((p, i) => p.pack_num = i + 1);
+                renderizarTabela();
+            } else {
+                alert("Não é possível remover o último pack.");
+            }
+            return;
+        }
+        // Abrir modal
+        btn = e.target.closest('.open-grade-modal-btn');
+        if (btn) {
+            openGradeModal(parseInt(btn.dataset.productIndex), parseInt(btn.dataset.packIndex));
+            return;
+        }
+    });
+
+    itensTableBody.addEventListener('input', (e) => {
+        // Custo
+        if (e.target.classList.contains('cost-input')) {
+            const product = itensDoPedido[e.target.dataset.productIndex];
+            product.custo = parseFloat(e.target.value.replace('R$ ', '').replace(',', '.')) || 0;
+        }
+        // Distribuição por filial
+        if (e.target.classList.contains('filial-dist-input')) {
+            const { productIndex, packIndex, filialCodigo } = e.target.dataset;
+            const pack = itensDoPedido[productIndex].packs[packIndex];
+            pack.filialDistribution[filialCodigo] = parseInt(e.target.value) || 0;
+        }
+        renderizarTabela(); // Re-renderiza para atualizar todos os totais
+    });
+
+    // Modal Listeners
+    closeModalBtn.addEventListener('click', hideModal);
+    cancelModalBtn.addEventListener('click', hideModal);
+    
+    saveGradeBtn.addEventListener('click', () => {
+        const { productIndex, packIndex } = modalState;
+        itensDoPedido[productIndex].packs[packIndex].gradeDetails = JSON.parse(JSON.stringify(modalState.gradeDetails));
+        hideModal();
+        renderizarTabela();
+    });
+
+    packContentContainer.addEventListener('input', (e) => {
+        const { gradeDetails } = modalState;
+        if (e.target.classList.contains('multiplier-input')) {
+            gradeDetails.multiplicadores[e.target.dataset.cor] = parseInt(e.target.value) || 1;
+        }
+        if (e.target.classList.contains('grade-qty-input')) {
+            const { cor, tamanho } = e.target.dataset;
+            gradeDetails.grade[cor][tamanho] = parseInt(e.target.value) || 0;
+        }
+        renderModalContent(); // Re-renderiza o conteúdo do modal para atualizar totais
+    });
+    
+    form.addEventListener('submit', function(e) {
+        atualizarTotaisEJson();
+        if (JSON.parse(hiddenJsonInput.value).length === 0) {
+            e.preventDefault();
+            alert('O pedido deve ter pelo menos um item com quantidade distribuída.');
+        }
+    });
+    
+    // --- INICIALIZAÇÃO ---
+    let flatItensFromServer = {{ itens_pedido | tojson | safe }};
+    // A lógica para carregar itens existentes (`agruparItensIniciais`) precisaria ser
+    // completamente reescrita para suportar a nova estrutura hierárquica.
+    // Por enquanto, esta parte focará no cadastro de novos pedidos.
+    renderizarTabela();
+});
+</script>
+
+{% endblock %}

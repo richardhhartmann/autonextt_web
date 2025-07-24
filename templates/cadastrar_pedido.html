@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Pedido{% endblock %}
+
+{% block content %}
+<div class="container mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Cadastrar Novo Pedido</h1>
+
+    <form id="form-pedido" action="/pedidos/cadastrar" method="POST">
+        <!-- Seção de Cabeçalho do Pedido -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Informações do Pedido</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                    <label for="pes_codigo" class="block text-sm font-medium text-gray-700">Fornecedor*</label>
+                    <select name="pes_codigo" id="pes_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Selecione...</option>
+                        {% for f in fornecedores %}
+                        <option value="{{ f.pes_codigo }}">{{ f.pes_nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="usu_codigo_comprador" class="block text-sm font-medium text-gray-700">Comprador*</label>
+                    <select name="usu_codigo_comprador" id="usu_codigo_comprador" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Selecione...</option>
+                        {% for c in compradores %}
+                        <option value="{{ c.usu_codigo }}">{{ c.usu_login }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="ped_data_emissao" class="block text-sm font-medium text-gray-700">Data de Emissão*</label>
+                    <input type="date" name="ped_data_emissao" id="ped_data_emissao" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="ped_status" class="block text-sm font-medium text-gray-700">Status*</label>
+                    <select name="ped_status" id="ped_status" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="A">Aberto</option>
+                        <option value="F">Fechado</option>
+                        <option value="C">Cancelado</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="ped_data_entrega_inicial" class="block text-sm font-medium text-gray-700">Entrega Inicial*</label>
+                    <input type="date" name="ped_data_entrega_inicial" id="ped_data_entrega_inicial" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="ped_data_entrega_final" class="block text-sm font-medium text-gray-700">Entrega Final*</label>
+                    <input type="date" name="ped_data_entrega_final" id="ped_data_entrega_final" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="cpg_codigo" class="block text-sm font-medium text-gray-700">Cond. Pagamento</label>
+                    <input type="number" name="cpg_codigo" id="cpg_codigo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div class="lg:col-span-4">
+                    <label for="ped_observacao" class="block text-sm font-medium text-gray-700">Observação</label>
+                    <textarea name="ped_observacao" id="ped_observacao" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                </div>
+                <!-- Campos de totais (serão preenchidos via JS) -->
+                <input type="hidden" name="ped_qtde_total" id="ped_qtde_total" value="0">
+                <input type="hidden" name="ped_valor_total" id="ped_valor_total" value="0">
+                <input type="hidden" name="ped_custo_medio" id="ped_custo_medio" value="0">
+            </div>
+        </div>
+
+        <!-- Seção de Itens do Pedido -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Itens do Pedido</h2>
+            <!-- Formulário para adicionar item -->
+            <div class="grid grid-cols-1 lg:grid-cols-6 gap-4 items-end p-4 border rounded-lg mb-4 bg-gray-50">
+                <div class="lg:col-span-2">
+                    <label for="produto-select" class="block text-sm font-medium text-gray-700">Produto</label>
+                    <select id="produto-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Buscar produto...</option>
+                        {% for p in produtos %}
+                        <option value="{{ p.prd_codigo }}" data-sec="{{ p.sec_codigo }}" data-esp="{{ p.esp_codigo }}" data-custo="{{ p.prd_ultimo_custo | default(0.0, true) }}">{{ p.prd_descricao }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="item-quantidade" class="block text-sm font-medium text-gray-700">Quantidade</label>
+                    <input type="number" id="item-quantidade" min="1" value="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="item-custo" class="block text-sm font-medium text-gray-700">Custo Unit.</label>
+                    <input type="number" step="0.01" id="item-custo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="item-filial" class="block text-sm font-medium text-gray-700">Filial</label>
+                    <input type="number" id="item-filial" value="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <button type="button" id="add-item-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300">Adicionar</button>
+                </div>
+            </div>
+
+            <!-- Tabela de itens adicionados -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full leading-normal">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            <th class="px-5 py-3">Produto</th>
+                            <th class="px-5 py-3">Quantidade</th>
+                            <th class="px-5 py-3">Custo Unit.</th>
+                            <th class="px-5 py-3">Subtotal</th>
+                            <th class="px-5 py-3">Filial</th>
+                            <th class="px-5 py-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itens-table-body">
+                        <!-- Itens serão inseridos aqui via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <!-- Hidden input para enviar os itens em JSON -->
+            <input type="hidden" name="itens_pedido_json" id="itens_pedido_json">
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="mt-8 pt-5 border-t border-gray-200 flex justify-end gap-4">
+            <a href="/pedidos" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                Cancelar
+            </a>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300">
+                Salvar Pedido
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const produtoSelect = document.getElementById('produto-select');
+    const quantidadeInput = document.getElementById('item-quantidade');
+    const custoInput = document.getElementById('item-custo');
+    const filialInput = document.getElementById('item-filial');
+    const addItemBtn = document.getElementById('add-item-btn');
+    const itensTableBody = document.getElementById('itens-table-body');
+    const form = document.getElementById('form-pedido');
+    const hiddenJsonInput = document.getElementById('itens_pedido_json');
+    
+    let itensDoPedido = [];
+
+    // Preenche o custo quando um produto é selecionado
+    produtoSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const custo = selectedOption.dataset.custo || '0.00';
+        custoInput.value = parseFloat(custo).toFixed(2);
+    });
+
+    addItemBtn.addEventListener('click', function() {
+        const selectedOption = produtoSelect.options[produtoSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            alert('Por favor, selecione um produto.');
+            return;
+        }
+
+        const item = {
+            id: Date.now(), // ID único para manipulação no front-end
+            prd_codigo: selectedOption.value,
+            descricao: selectedOption.text,
+            sec_codigo: selectedOption.dataset.sec,
+            esp_codigo: selectedOption.dataset.esp,
+            ipr_codigo: 1, // Assumindo 1, ajuste se necessário
+            quantidade: parseFloat(quantidadeInput.value),
+            custo: parseFloat(custoInput.value),
+            fil_codigo: parseInt(filialInput.value)
+        };
+
+        if (isNaN(item.quantidade) || item.quantidade <= 0) {
+            alert('Quantidade inválida.');
+            return;
+        }
+        if (isNaN(item.custo) || item.custo < 0) {
+            alert('Custo inválido.');
+            return;
+        }
+
+        itensDoPedido.push(item);
+        renderizarTabela();
+        limparCamposItem();
+    });
+
+    function renderizarTabela() {
+        itensTableBody.innerHTML = '';
+        let qtdeTotal = 0;
+        let valorTotal = 0;
+
+        itensDoPedido.forEach(item => {
+            const subtotal = item.quantidade * item.custo;
+            qtdeTotal += item.quantidade;
+            valorTotal += subtotal;
+
+            const row = document.createElement('tr');
+            row.classList.add('border-b', 'border-gray-200');
+            row.innerHTML = `
+                <td class="px-5 py-4 text-sm text-gray-800">${item.descricao}</td>
+                <td class="px-5 py-4 text-sm text-gray-800">${item.quantidade}</td>
+                <td class="px-5 py-4 text-sm text-gray-800">R$ ${item.custo.toFixed(2)}</td>
+                <td class="px-5 py-4 text-sm text-gray-800">R$ ${subtotal.toFixed(2)}</td>
+                <td class="px-5 py-4 text-sm text-gray-800">${item.fil_codigo}</td>
+                <td class="px-5 py-4 text-sm">
+                    <button type="button" onclick="removerItem(${item.id})" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            itensTableBody.appendChild(row);
+        });
+        
+        // Atualiza os totais no formulário principal
+        document.getElementById('ped_qtde_total').value = qtdeTotal;
+        document.getElementById('ped_valor_total').value = valorTotal.toFixed(2);
+        document.getElementById('ped_custo_medio').value = (qtdeTotal > 0 ? valorTotal / qtdeTotal : 0).toFixed(2);
+    }
+
+    window.removerItem = function(itemId) {
+        itensDoPedido = itensDoPedido.filter(item => item.id !== itemId);
+        renderizarTabela();
+    }
+
+    function limparCamposItem() {
+        produtoSelect.selectedIndex = 0;
+        quantidadeInput.value = '1';
+        custoInput.value = '';
+        filialInput.value = '1';
+    }
+
+    form.addEventListener('submit', function(e) {
+        if (itensDoPedido.length === 0) {
+            e.preventDefault();
+            alert('Você deve adicionar pelo menos um item ao pedido.');
+            return;
+        }
+        // Preenche o input escondido com os dados dos itens em formato JSON
+        hiddenJsonInput.value = JSON.stringify(itensDoPedido);
+    });
+    
+    // Define a data de emissão padrão como hoje
+    document.getElementById('ped_data_emissao').valueAsDate = new Date();
+});
+</script>
+{% endblock %}
