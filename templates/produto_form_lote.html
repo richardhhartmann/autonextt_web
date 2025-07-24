@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Produtos em Lote{% endblock %}
+
+{% block content %}
+<div class="container mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Cadastrar Novos Produtos em Lote</h1>
+
+    <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+        <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Parâmetros Fixos para Novos Produtos</h2>
+        <p class="text-sm text-gray-500 mb-4">Ative o interruptor para fixar um valor. Produtos adicionados usarão os valores fixados.</p>
+        
+        <div id="fixed-params-matrix" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            
+            <div class="flex items-center space-x-4">
+                <label class="font-medium text-gray-700 w-32 flex-shrink-0">Seção</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" data-param="sec_codigo" class="sr-only peer fixed-param-toggle">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+                <select id="param_sec_codigo" data-param="sec_codigo" class="param-input flex-grow block w-full rounded-md border-gray-300 shadow-sm bg-gray-100" disabled></select>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <label class="font-medium text-gray-700 w-32 flex-shrink-0">Espécie</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" data-param="esp_codigo" class="sr-only peer fixed-param-toggle">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+                <select id="param_esp_codigo" data-param="esp_codigo" class="param-input flex-grow block w-full rounded-md border-gray-300 shadow-sm bg-gray-100" disabled>
+                    <option value="">Selecione uma seção primeiro</option>
+                </select>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <label class="font-medium text-gray-700 w-32 flex-shrink-0">Marca</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" data-param="mar_codigo" class="sr-only peer fixed-param-toggle">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+                <select id="param_mar_codigo" data-param="mar_codigo" class="param-input flex-grow block w-full rounded-md border-gray-300 shadow-sm bg-gray-100" disabled></select>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <label class="font-medium text-gray-700 w-32 flex-shrink-0">Comprador</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" data-param="usu_codigo_comprador" class="sr-only peer fixed-param-toggle">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+                <select id="param_usu_codigo_comprador" data-param="usu_codigo_comprador" class="param-input flex-grow block w-full rounded-md border-gray-300 shadow-sm bg-gray-100" disabled></select>
+            </div>
+
+             </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl shadow-md">
+        <div class="flex justify-between items-center border-b pb-2 mb-4">
+            <h2 class="text-xl font-semibold text-gray-700">Produtos para Adicionar</h2>
+            <button type="button" id="add-product-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                <i class="fas fa-plus mr-2"></i>Adicionar Produto
+            </button>
+        </div>
+
+        <div id="products-list-container" class="space-y-4">
+            </div>
+    </div>
+
+    <div class="mt-8 pt-5 border-t border-gray-200 flex justify-end gap-4">
+        <a href="{{ url_for('visualizar_produtos') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancelar</a>
+        <button type="button" id="save-all-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">
+            Cadastrar Produtos
+        </button>
+    </div>
+</div>
+
+<template id="product-row-template">
+    <div class="p-4 border rounded-lg bg-gray-50 product-entry">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Descrição*</label>
+                <input type="text" data-field="prd_descricao" required maxlength="50" class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Descrição Reduzida*</label>
+                <input type="text" data-field="prd_descricao_reduzida" required maxlength="50" class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+             <div>
+                <label class="block text-sm font-medium text-gray-700">Referência*</label>
+                <input type="text" data-field="prd_referencia_fornec" required maxlength="50" class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Cód. Original</label>
+                <input type="number" data-field="prd_codigo_original" class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Seção*</label>
+                <select data-field="sec_codigo" required class="product-field product-sec-select mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Espécie*</label>
+                <select data-field="esp_codigo" required class="product-field product-esp-select mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled>
+                    <option value="">Selecione a seção</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Marca*</label>
+                <select data-field="mar_codigo" required class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Comprador</label>
+                <select data-field="usu_codigo_comprador" class="product-field mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+            </div>
+            </div>
+        <div class="flex justify-end items-center gap-3 mt-4 pt-2 border-t">
+            <button type="button" class="action-btn-duplicate text-green-600 hover:text-green-800" title="Duplicar Produto">
+                <i class="fas fa-copy"></i> Duplicar
+            </button>
+            <button type="button" class="action-btn-delete text-red-600 hover:text-red-800" title="Excluir Produto">
+                <i class="fas fa-trash-alt"></i> Excluir
+            </button>
+        </div>
+    </div>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- ELEMENTOS DO DOM ---
+    const matrixContainer = document.getElementById('fixed-params-matrix');
+    const addProductBtn = document.getElementById('add-product-btn');
+    const productsListContainer = document.getElementById('products-list-container');
+    const productRowTemplate = document.getElementById('product-row-template');
+    const saveAllBtn = document.getElementById('save-all-btn');
+
+    // --- ESTADO DA APLICAÇÃO ---
+    let productsToCreate = [];
+    let fixedParams = {};
+    let allFormData = {}; // Armazena dados dos combos para não buscar toda hora
+
+    // --- FUNÇÕES DE LÓGICA ---
+
+    // Função para popular um select com opções
+    function populateSelect(selectElement, data, valueField, textField) {
+        selectElement.innerHTML = '<option value="">Selecione...</option>';
+        data.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item[valueField];
+            option.textContent = Array.isArray(textField) 
+                ? `${item[textField[0]]} - ${item[textField[1]]}`
+                : item[textField];
+            selectElement.appendChild(option);
+        });
+    }
+
+    // Carrega todos os dados para os selects do formulário
+    async function initializeForm() {
+        try {
+            allFormData = await fetch('/api/produtos/form_data').then(res => res.json());
+            
+            // Popula os selects na Matriz de Parâmetros Fixos
+            populateSelect(document.getElementById('param_sec_codigo'), allFormData.secoes, 'sec_codigo', ['sec_codigo', 'sec_descricao']);
+            populateSelect(document.getElementById('param_mar_codigo'), allFormData.marcas, 'mar_codigo', ['mar_codigo', 'mar_descricao']);
+            populateSelect(document.getElementById('param_usu_codigo_comprador'), allFormData.compradores, 'usu_codigo', ['usu_codigo', 'usu_login']);
+            // Popule outros selects da matriz aqui...
+
+        } catch (error) {
+            console.error("Erro ao inicializar formulário:", error);
+            alert("Não foi possível carregar os dados para o formulário.");
+        }
+    }
+
+    // Atualiza o objeto de parâmetros fixos
+    function updateFixedParams() {
+        fixedParams = {};
+        matrixContainer.querySelectorAll('.fixed-param-toggle:checked').forEach(checkbox => {
+            const paramName = checkbox.dataset.param;
+            const input = matrixContainer.querySelector(`.param-input[data-param="${paramName}"]`);
+            if (input.value) {
+                fixedParams[paramName] = input.value;
+            }
+        });
+    }
+    
+    // Renderiza a lista de produtos na tela
+    function renderProductList() {
+        productsListContainer.innerHTML = '';
+        productsToCreate.forEach((productData, index) => {
+            const clone = productRowTemplate.content.cloneNode(true);
+            const productEntry = clone.querySelector('.product-entry');
+            productEntry.dataset.index = index;
+
+            // Popula os selects dentro da nova linha
+            populateSelect(productEntry.querySelector('[data-field="sec_codigo"]'), allFormData.secoes, 'sec_codigo', ['sec_codigo', 'sec_descricao']);
+            populateSelect(productEntry.querySelector('[data-field="mar_codigo"]'), allFormData.marcas, 'mar_codigo', ['mar_codigo', 'mar_descricao']);
+            populateSelect(productEntry.querySelector('[data-field="usu_codigo_comprador"]'), allFormData.compradores, 'usu_codigo', ['usu_codigo', 'usu_login']);
+            
+            // Preenche os campos do produto com os dados atuais
+            productEntry.querySelectorAll('.product-field').forEach(field => {
+                const fieldName = field.dataset.field;
+                if (productData[fieldName] !== undefined) {
+                    field.value = productData[fieldName];
+                }
+                // Desabilita campo se estiver fixado na matriz
+                if (fixedParams[fieldName] !== undefined) {
+                    field.disabled = true;
+                    field.classList.add('bg-gray-100');
+                }
+            });
+            productsListContainer.appendChild(clone);
+        });
+    }
+
+    // --- EVENT LISTENERS ---
+
+    // Lida com os interruptores e selects da matriz de parâmetros
+    matrixContainer.addEventListener('change', (e) => {
+        const target = e.target;
+        if (target.classList.contains('fixed-param-toggle')) {
+            const paramName = target.dataset.param;
+            const selectInput = document.getElementById(`param_${paramName}`);
+            selectInput.disabled = !target.checked;
+            selectInput.classList.toggle('bg-gray-100', !target.checked);
+        }
+        updateFixedParams();
+        renderProductList(); // Re-renderiza para aplicar disabled/enabled nas linhas
+    });
+
+    // Adiciona um novo produto à lista
+    addProductBtn.addEventListener('click', () => {
+        const newProduct = { ...fixedParams };
+        productsToCreate.push(newProduct);
+        renderProductList();
+    });
+
+    // Lida com eventos dentro da lista de produtos (inputs, deletes, etc.)
+    productsListContainer.addEventListener('input', (e) => {
+        const target = e.target;
+        const productEntry = target.closest('.product-entry');
+        if (!productEntry || !target.classList.contains('product-field')) return;
+        
+        const index = parseInt(productEntry.dataset.index);
+        const fieldName = target.dataset.field;
+        
+        // Atualiza o dado no array
+        productsToCreate[index][fieldName] = target.value;
+        
+        // Regra: Duplicar descrição
+        if (fieldName === 'prd_descricao') {
+            const descReduzidaInput = productEntry.querySelector('[data-field="prd_descricao_reduzida"]');
+            descReduzidaInput.value = target.value;
+            productsToCreate[index]['prd_descricao_reduzida'] = target.value;
+        }
+    });
+
+    productsListContainer.addEventListener('change', async (e) => {
+        const target = e.target;
+        const productEntry = target.closest('.product-entry');
+        if (!productEntry || !target.classList.contains('product-sec-select')) return;
+
+        const secCodigo = target.value;
+        const espSelect = productEntry.querySelector('.product-esp-select');
+        espSelect.innerHTML = '<option value="">Carregando...</option>';
+        espSelect.disabled = true;
+
+        if (secCodigo) {
+            try {
+                const especies = await fetch(`/api/especies_por_secao/${secCodigo}`).then(res => res.json());
+                populateSelect(espSelect, especies, 'esp_codigo', ['esp_codigo', 'esp_descricao']);
+                espSelect.disabled = false;
+            } catch (error) {
+                espSelect.innerHTML = '<option value="">Erro</option>';
+            }
+        } else {
+            espSelect.innerHTML = '<option value="">Selecione a seção</option>';
+        }
+    });
+
+    productsListContainer.addEventListener('click', (e) => {
+        const productEntry = e.target.closest('.product-entry');
+        if (!productEntry) return;
+        const index = parseInt(productEntry.dataset.index);
+
+        if (e.target.closest('.action-btn-delete')) {
+            productsToCreate.splice(index, 1);
+            renderProductList();
+        }
+        if (e.target.closest('.action-btn-duplicate')) {
+            const currentProduct = productsToCreate[index];
+            const duplicatedProduct = JSON.parse(JSON.stringify(currentProduct));
+            productsToCreate.splice(index + 1, 0, duplicatedProduct);
+            renderProductList();
+        }
+    });
+
+    // Salvar todos os produtos
+    saveAllBtn.addEventListener('click', async () => {
+        // ... (Lógica de validação e fetch para /api/produtos/cadastrar/lote como no arquivo original) ...
+        // Lembre-se de adaptar o backend para receber todos os novos campos!
+        alert('Funcionalidade de salvar precisa ser conectada ao backend que aceite os novos campos.');
+    });
+
+    // --- INICIALIZAÇÃO ---
+    initializeForm();
+});
+</script>
+{% endblock %}

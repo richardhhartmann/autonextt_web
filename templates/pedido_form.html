@@ -37,7 +37,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                 <div>
+                <div>
                     <label for="cpg_codigo" class="block text-sm font-medium text-gray-700">Cond. Pagamento</label>
                     <input type="number" name="cpg_codigo" id="cpg_codigo" value="{{ pedido.cpg_codigo if pedido else '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
@@ -62,7 +62,7 @@
         <div class="bg-white p-6 rounded-xl shadow-md">
             <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Itens do Pedido</h2>
             <div class="p-4 border rounded-lg mb-4 bg-gray-50">
-                 <div class="mb-4">
+                <div class="mb-4">
                     <label for="product-search" class="block text-sm font-medium text-gray-700">Buscar Produto para Adicionar</label>
                     <input type="text" id="product-search" placeholder="Digite o código, descrição, etc..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
@@ -132,8 +132,8 @@
 
         <div class="mt-8 pt-5 border-t flex justify-end gap-4">
              <button id="cancel-modal-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
-                Cancelar
-            </button>
+                 Cancelar
+             </button>
             <button id="save-grade-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
                 Salvar Molde do Pack
             </button>
@@ -143,15 +143,13 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- ELEMENTOS DO DOM ---
+    // --- 1. SELEÇÃO DE ELEMENTOS DO DOM ---
     const productSearchInput = document.getElementById('product-search');
     const productMultiSelect = document.getElementById('product-multiselect');
     const addItemBtn = document.getElementById('add-item-btn');
     const itensTableBody = document.getElementById('itens-table-body');
     const form = document.getElementById('form-pedido');
     const hiddenJsonInput = document.getElementById('itens_pedido_json');
-    
-    // Modal
     const gradeModal = document.getElementById('grade-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const cancelModalBtn = document.getElementById('cancel-modal-btn');
@@ -159,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const packContentContainer = document.getElementById('pack-content');
     const modalProductTitle = document.getElementById('modal-product-title');
 
-    // --- ESTADO DA APLICAÇÃO ---
+    // --- 2. ESTADO DA APLICAÇÃO ---
     let itensDoPedido = [];
     let modalState = {
         productIndex: null,
@@ -182,7 +180,149 @@ document.addEventListener('DOMContentLoaded', function() {
         {% for f in filiais %}{ fil_codigo: {{ f.fil_codigo }}, fil_descricao: `{{ f.fil_descricao | e }}` },{% endfor %}
     ];
 
-    // --- LÓGICA PRINCIPAL ---
+    // --- 3. FUNÇÕES AUXILIARES E DE LÓGICA ---
+
+    /**
+     * Prepara os dados do servidor ou do sessionStorage, garantindo que tenham as propriedades de estado da UI.
+     * ATUALIZADO: Agora também inicializa a distribuição por filial.
+     */
+    function prepararItensDoServidor(itens) {
+        if (!itens || !Array.isArray(itens)) return [];
+        
+        return itens.map(produto => {
+            // !!! CORREÇÃO APLICADA AQUI !!!
+            produto.custo = parseFloat(produto.custo) || 0.0; // Garante que o custo seja um número
+
+            produto.isExpanded = produto.isExpanded !== undefined ? produto.isExpanded : true;
+            if (produto.packs && Array.isArray(produto.packs)) {
+                produto.packs.forEach(pack => {
+                    pack.isExpanded = pack.isExpanded !== undefined ? pack.isExpanded : true;
+                    pack.filialDistribution = pack.filialDistribution || {};
+                    // Garante que todas as filiais existem na distribuição do pack
+                    filiais.forEach(f => {
+                         if (pack.filialDistribution[f.fil_codigo] === undefined) {
+                            pack.filialDistribution[f.fil_codigo] = 0;
+                         }
+                    });
+                });
+            } else {
+                produto.packs = [];
+            }
+            return produto;
+        });
+    }
+
+    function getPiecesPerPack(gradeDetails) {
+        if (!gradeDetails) return 0;
+        if (gradeDetails.simpleGrade) {
+            return (gradeDetails.simpleGrade.quantity || 0) * (gradeDetails.simpleGrade.multiplier || 1);
+        }
+        if (gradeDetails.grade) {
+            let total = 0;
+            for (const cor in gradeDetails.grade) {
+                const multiplicador = (gradeDetails.multiplicadores && gradeDetails.multiplicadores[cor]) ? gradeDetails.multiplicadores[cor] : 1;
+                total += Object.values(gradeDetails.grade[cor]).reduce((sum, qty) => sum + (parseInt(qty) || 0), 0) * multiplicador;
+            }
+            return total;
+        }
+        return 0;
+    }
+
+    function addNewPackToProduct(product) {
+        const newPackNum = product.packs.length > 0 ? Math.max(...product.packs.map(p => p.pack_num)) + 1 : 1;
+        const newPack = {
+            pack_num: newPackNum,
+            gradeDetails: null, 
+            filialDistribution: {},
+            isExpanded: true
+        };
+        filiais.forEach(f => {
+            newPack.filialDistribution[f.fil_codigo] = 0;
+        });
+        product.packs.push(newPack);
+    }
+
+    function renderizarTabela() {
+        itensTableBody.innerHTML = '';
+        if (itensDoPedido.length === 0) {
+            itensTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500">Nenhum produto adicionado.</td></tr>`;
+            atualizarTotaisEJson();
+            return;
+        }
+
+        itensDoPedido.forEach((item, productIndex) => {
+            const totalPacksProduto = item.packs.reduce((sum, pack) => sum + Object.values(pack.filialDistribution).reduce((packSum, qty) => packSum + (parseInt(qty) || 0), 0), 0);
+            let totalPecasProduto = 0;
+            item.packs.forEach(pack => {
+                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+                const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + (parseInt(qty) || 0), 0);
+                totalPecasProduto += pecasPorPack * qtdPacks;
+            });
+            const subtotalProduto = totalPecasProduto * item.custo;
+            const productRow = document.createElement('tr');
+            productRow.className = 'bg-gray-100 border-b-2 border-gray-300 font-semibold text-gray-800 cursor-pointer toggle-product';
+            productRow.dataset.productIndex = productIndex;
+            const toggleIcon = item.isExpanded ? '<i class="fas fa-chevron-down fa-xs mr-2"></i>' : '<i class="fas fa-chevron-right fa-xs mr-2"></i>';
+
+            productRow.innerHTML = `
+                <td class="px-5 py-3 text-sm">${toggleIcon}${item.full_code} - ${item.descricao}</td>
+                <td class="px-5 py-3"></td>
+                <td class="px-5 py-3 text-center">${totalPacksProduto}</td>
+                <td class="px-5 py-3">
+                    <input type="tel" class="cost-input mt-1 block w-24 rounded-md border-gray-300 shadow-sm" data-product-index="${productIndex}" value="R$ ${(item.custo || 0).toFixed(2).replace('.', ',')}" placeholder="R$ 0,00">
+                </td>
+                <td class="px-5 py-3 text-center font-bold">${totalPecasProduto}</td>
+                <td class="px-5 py-3 text-center font-bold">R$ ${subtotalProduto.toFixed(2).replace('.', ',')}</td>
+                <td class="px-5 py-3 text-center">
+                    <button type="button" class="add-new-pack-btn text-green-600 hover:text-green-800" title="Adicionar Novo Pack" data-product-index="${productIndex}"><i class="fas fa-plus-circle fa-lg"></i></button>
+                    <button type="button" class="remove-product-btn text-red-600 hover:text-red-800 ml-3" title="Remover Produto" data-product-index="${productIndex}"><i class="fas fa-times-circle fa-lg"></i></button>
+                </td>
+            `;
+            itensTableBody.appendChild(productRow);
+
+            if (item.isExpanded) {
+                item.packs.forEach((pack, packIndex) => {
+                    const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+                    const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + (parseInt(qty) || 0), 0);
+                    const subtotalPack = pecasPorPack * qtdPacks * item.custo;
+                    const packToggleIcon = pack.isExpanded ? '<i class="fas fa-chevron-down fa-xs mr-2"></i>' : '<i class="fas fa-chevron-right fa-xs mr-2"></i>';
+                    
+                    const packRow = document.createElement('tr');
+                    packRow.className = 'border-b border-gray-200 bg-blue-50 cursor-pointer toggle-pack';
+                    packRow.dataset.productIndex = productIndex;
+                    packRow.dataset.packIndex = packIndex;
+
+                    packRow.innerHTML = `<td class="pl-8 pr-5 py-2 text-sm font-medium">${packToggleIcon}↳ Pack ${pack.pack_num}</td>
+                        <td class="px-5 py-2 text-center">${pecasPorPack}</td>
+                        <td class="px-5 py-2 text-center">${qtdPacks}</td>
+                        <td class="px-5 py-2"></td>
+                        <td class="px-5 py-2 text-center">${pecasPorPack * qtdPacks}</td>
+                        <td class="px-5 py-2 text-center">R$ ${subtotalPack.toFixed(2).replace('.', ',')}</td>
+                        <td class="px-5 py-2 text-center">
+                            <button type="button" class="open-grade-modal-btn text-teal-600 hover:text-teal-900" title="Definir Molde do Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}"><i class="fas fa-th-large"></i></button>
+                            <button type="button" class="duplicate-pack-btn text-blue-600 hover:text-blue-900 ml-3" title="Duplicar Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}"><i class="fas fa-copy"></i></button>
+                            <button type="button" class="delete-pack-btn text-red-600 hover:text-red-800 ml-3" title="Apagar Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}"><i class="fas fa-trash-alt"></i></button>
+                        </td>`;
+                    itensTableBody.appendChild(packRow);
+
+                    if (pack.isExpanded) {
+                        const filialRow = document.createElement('tr');
+                        filialRow.className = 'border-b border-gray-200';
+                        let filialCells = `<td class="pl-16 pr-5 py-3 text-sm text-gray-600" colspan="2">↳ Distribuição (Qtd. Packs):</td>`;
+                        filiais.forEach(f => {
+                            filialCells += `<td class="px-2 py-1 text-center">
+                                <label class="text-xs font-semibold">${f.fil_descricao}</label>
+                                <input type="number" min="0" value="${pack.filialDistribution[f.fil_codigo] || 0}" class="filial-dist-input mt-1 block w-full rounded-md border-gray-300 shadow-sm" data-product-index="${productIndex}" data-pack-index="${packIndex}" data-filial-codigo="${f.fil_codigo}">
+                            </td>`;
+                        });
+                        filialRow.innerHTML = filialCells + `<td colspan="${7 - filiais.length - 2}"></td>`;
+                        itensTableBody.appendChild(filialRow);
+                    }
+                });
+            }
+        });
+        atualizarTotaisEJson();
+    }
 
     function addProductItems() {
         const selectedOptions = Array.from(productMultiSelect.selectedOptions);
@@ -196,131 +336,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const newItem = {
                 full_code: fullCode,
                 ...produtoInfo,
-                custo: 0.00,
-                packs: [] // Packs começarão vazios
+                custo: 0.0,
+                packs: [],
+                isExpanded: true
             };
-            addNewPackToProduct(newItem); // Adiciona o primeiro pack por padrão
+            addNewPackToProduct(newItem);
             itensDoPedido.push(newItem);
         });
         renderizarTabela();
         productMultiSelect.selectedIndex = -1;
-    }
-
-    function addNewPackToProduct(product) {
-        const newPackNum = product.packs.length + 1;
-        const newPack = {
-            pack_num: newPackNum,
-            gradeDetails: null, // O molde da grade começa nulo
-            filialDistribution: {} // { fil_codigo: qtd_packs }
-        };
-        filiais.forEach(f => {
-            newPack.filialDistribution[f.fil_codigo] = 0;
-        });
-        product.packs.push(newPack);
-    }
-
-    function renderizarTabela() {
-        itensTableBody.innerHTML = '';
-        if (itensDoPedido.length === 0) {
-            itensTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500">Nenhum produto adicionado.</td></tr>`;
-            return;
-        }
-
-        itensDoPedido.forEach((item, productIndex) => {
-            // --- Linha Principal do Produto ---
-            const totalPacksProduto = item.packs.reduce((sum, pack) => {
-                return sum + Object.values(pack.filialDistribution).reduce((packSum, qty) => packSum + qty, 0);
-            }, 0);
-
-            let totalPecasProduto = 0;
-            item.packs.forEach(pack => {
-                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
-                const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + qty, 0);
-                totalPecasProduto += pecasPorPack * qtdPacks;
-            });
-            const subtotalProduto = totalPecasProduto * item.custo;
-
-            const productRow = document.createElement('tr');
-            productRow.className = 'bg-gray-100 border-b-2 border-gray-300 font-semibold text-gray-800';
-            productRow.innerHTML = `
-                <td class="px-5 py-3 text-sm">
-                    ${item.full_code} - ${item.descricao}
-                </td>
-                <td class="px-5 py-3"></td>
-                <td class="px-5 py-3 text-center">${totalPacksProduto}</td>
-                <td class="px-5 py-3">
-                    <input type="text" class="cost-input mt-1 block w-24 rounded-md border-gray-300 shadow-sm" data-product-index="${productIndex}" value="R$ ${(item.custo || 0).toFixed(2).replace('.', ',')}" placeholder="R$ 0,00">
-                </td>
-                <td class="px-5 py-3 text-center font-bold">${totalPecasProduto}</td>
-                <td class="px-5 py-3 text-center font-bold">R$ ${subtotalProduto.toFixed(2).replace('.', ',')}</td>
-                <td class="px-5 py-3 text-center">
-                    <button type="button" class="add-new-pack-btn text-green-600 hover:text-green-800" title="Adicionar Novo Pack" data-product-index="${productIndex}">
-                        <i class="fas fa-plus-circle fa-lg"></i>
-                    </button>
-                    <button type="button" class="remove-product-btn text-red-600 hover:text-red-800 ml-3" title="Remover Produto" data-product-index="${productIndex}">
-                        <i class="fas fa-times-circle fa-lg"></i>
-                    </button>
-                </td>
-            `;
-            itensTableBody.appendChild(productRow);
-
-            // --- Linhas dos Packs e Filiais ---
-            if (item.packs.length === 0) {
-                 const noPackRow = document.createElement('tr');
-                 noPackRow.innerHTML = `<td colspan="7" class="pl-10 py-2 text-gray-500">Clique em '+' para adicionar o primeiro pack.</td>`;
-                 itensTableBody.appendChild(noPackRow);
-            }
-
-            item.packs.forEach((pack, packIndex) => {
-                const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
-                const qtdPacks = Object.values(pack.filialDistribution).reduce((sum, qty) => sum + qty, 0);
-                const subtotalPack = pecasPorPack * qtdPacks * item.custo;
-
-                const packRow = document.createElement('tr');
-                packRow.className = 'border-b border-gray-200 bg-blue-50';
-                packRow.innerHTML = `
-                    <td class="pl-8 pr-5 py-2 text-sm font-medium">↳ Pack ${pack.pack_num}</td>
-                    <td class="px-5 py-2 text-center">${pecasPorPack}</td>
-                    <td class="px-5 py-2 text-center">${qtdPacks}</td>
-                    <td class="px-5 py-2"></td>
-                    <td class="px-5 py-2 text-center">${pecasPorPack * qtdPacks}</td>
-                    <td class="px-5 py-2 text-center">R$ ${subtotalPack.toFixed(2).replace('.', ',')}</td>
-                    <td class="px-5 py-2 text-center">
-                        <button type="button" class="open-grade-modal-btn text-teal-600 hover:text-teal-900" title="Definir Molde do Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}">
-                            <i class="fas fa-th-large"></i>
-                        </button>
-                        <button type="button" class="delete-pack-btn text-red-600 hover:text-red-800 ml-3" title="Apagar Pack" data-product-index="${productIndex}" data-pack-index="${packIndex}">
-                             <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                `;
-                itensTableBody.appendChild(packRow);
-
-                const filialRow = document.createElement('tr');
-                filialRow.className = 'border-b border-gray-200';
-                let filialCells = `<td class="pl-16 pr-5 py-3 text-sm text-gray-600" colspan="2">↳ Distribuição (Qtd. Packs):</td>`;
-                filiais.forEach(f => {
-                    filialCells += `
-                        <td class="px-2 py-1 text-center">
-                            <label class="text-xs font-semibold">${f.fil_descricao}</label>
-                            <input type="number" min="0" value="${pack.filialDistribution[f.fil_codigo] || 0}" 
-                                class="filial-dist-input mt-1 block w-full rounded-md border-gray-300 shadow-sm" 
-                                data-product-index="${productIndex}" data-pack-index="${packIndex}" data-filial-codigo="${f.fil_codigo}">
-                        </td>
-                    `;
-                });
-                filialRow.innerHTML = filialCells + `<td colspan="${7 - filiais.length - 2}"></td>`;
-                itensTableBody.appendChild(filialRow);
-            });
-        });
-        atualizarTotaisEJson();
-    }
-
-    function getPiecesPerPack(gradeDetails) {
-        if (!gradeDetails) return 0;
-        return Object.values(gradeDetails.grade).reduce((sum, tamanhos) => {
-            return sum + Object.values(tamanhos).reduce((rowSum, qty) => rowSum + qty, 0);
-        }, 0);
     }
 
     function atualizarTotaisEJson() {
@@ -332,18 +356,25 @@ document.addEventListener('DOMContentLoaded', function() {
             let qtdeTotalProduto = 0;
             item.packs.forEach(pack => {
                 const pecasPorPack = getPiecesPerPack(pack.gradeDetails);
+
                 Object.entries(pack.filialDistribution).forEach(([filialCodigo, qtdPacks]) => {
-                    const quantidadePecas = pecasPorPack * qtdPacks;
-                    if (quantidadePecas > 0) {
+                    const quantidadeNum = parseInt(qtdPacks) || 0;
+                    if (quantidadeNum > 0) {
+                        const quantidadePecas = pecasPorPack * quantidadeNum;
                         qtdeTotalProduto += quantidadePecas;
-                        // O JSON enviado ao backend pode precisar de uma estrutura mais complexa
-                        // Por agora, vamos achatá-lo como o backend espera
-                         flatItensList.push({
-                            prd_codigo: item.prd, sec_codigo: item.sec, esp_codigo: item.esp,
-                            ipr_codigo: pack.pack_num, // Usando pack_num como ipr_codigo
+                        
+                        flatItensList.push({
+                            prd_codigo: item.prd, 
+                            sec_codigo: item.sec, 
+                            esp_codigo: item.esp,
+                            pack_num: pack.pack_num,
                             custo: item.custo,
                             fil_codigo: parseInt(filialCodigo), 
-                            quantidade: quantidadePecas
+                            quantidade: quantidadePecas,
+                            fator_grade: pecasPorPack,
+                            fator_filial: quantidadeNum,
+                            // CRUCIAL: Serializa os detalhes da grade para o backend poder salvar e retornar
+                            grade_details_json: JSON.stringify(pack.gradeDetails)
                         });
                     }
                 });
@@ -358,25 +389,19 @@ document.addEventListener('DOMContentLoaded', function() {
         hiddenJsonInput.value = JSON.stringify(flatItensList);
     }
     
-    // --- LÓGICA DO MODAL ---
     async function openGradeModal(productIndex, packIndex) {
         modalState.productIndex = productIndex;
         modalState.packIndex = packIndex;
         const product = itensDoPedido[productIndex];
         const pack = product.packs[packIndex];
-
         modalProductTitle.textContent = `Molde do Pack ${pack.pack_num} - ${product.descricao}`;
-
         try {
             const response = await fetch(`/api/produto/grade/${product.sec}/${product.esp}/${product.prd}`);
             if (!response.ok) throw new Error('Falha ao buscar grade do produto.');
-            
             const apiGradeData = await response.json();
             loadOrInitializeModalState(pack, apiGradeData);
             renderModalContent();
-            
             gradeModal.classList.remove('hidden');
-
         } catch (error) {
             alert(error.message);
             console.error(error);
@@ -386,9 +411,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadOrInitializeModalState(pack, apiGradeData) {
         if (pack.gradeDetails) {
             modalState.gradeDetails = JSON.parse(JSON.stringify(pack.gradeDetails));
-            // Reconciliar
-            modalState.gradeDetails.cores = apiGradeData.cores;
-            modalState.gradeDetails.tamanhos = apiGradeData.tamanhos;
+            if (modalState.gradeDetails.grade) {
+                modalState.gradeDetails.cores = apiGradeData.cores;
+                modalState.gradeDetails.tamanhos = apiGradeData.tamanhos;
+            }
+            return;
+        }
+        if (apiGradeData.cores.length === 0 || apiGradeData.tamanhos.length === 0) {
+            modalState.gradeDetails = { simpleGrade: { quantity: 1, multiplier: 1 } };
         } else {
             modalState.gradeDetails = {
                 cores: apiGradeData.cores,
@@ -408,69 +438,51 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function renderModalContent() {
         packContentContainer.innerHTML = '';
-        const { cores, tamanhos, grade, multiplicadores } = modalState.gradeDetails;
-
+        const { cores, tamanhos, grade, multiplicadores, simpleGrade } = modalState.gradeDetails;
+        if (simpleGrade) {
+            const total = (simpleGrade.quantity || 0) * (simpleGrade.multiplier || 1);
+            packContentContainer.innerHTML = `
+                <div class="p-4 border rounded-lg bg-gray-50"><div class="grid grid-cols-3 gap-4 items-center">
+                        <div><label class="block text-sm font-medium text-gray-700">Quantidade</label><input type="number" min="0" value="${simpleGrade.quantity || 0}" class="simple-grade-qty mt-1 block w-full rounded-md border-gray-300 shadow-sm text-center"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">Multiplicador</label><input type="number" min="1" value="${simpleGrade.multiplier || 1}" class="simple-grade-multiplier mt-1 block w-full rounded-md border-gray-300 shadow-sm text-center"></div>
+                        <div class="text-center"><p class="text-sm font-medium text-gray-700">Total de Peças</p><p class="text-2xl font-bold text-gray-800 mt-1">${total}</p></div>
+                </div></div>`;
+            return;
+        }
         if (!cores || cores.length === 0 || !tamanhos || tamanhos.length === 0) {
             packContentContainer.innerHTML = `<p class="text-center text-gray-500">Este produto não possui atributos de Cor e Tamanho cadastrados.</p>`;
             return;
         }
-
         let grandTotal = 0;
-        // --- CABEÇALHO DA TABELA (COM ORDEM AJUSTADA) ---
-        let tableHTML = `<table class="min-w-full text-center border">
-            <thead>
-                <tr class="bg-gray-100">
-                    <th class="border p-2">Cor/Tamanho</th>`;
-        
-        // 1. Adiciona as colunas de Tamanho PRIMEIRO
+        let tableHTML = `<table class="min-w-full text-center border"><thead><tr class="bg-gray-100"><th class="border p-2">Cor/Tamanho</th>`;
         tamanhos.forEach(tamanho => { tableHTML += `<th class="border p-2">${tamanho}</th>`; });
-        
-        // 2. Adiciona a coluna Multiplicador DEPOIS dos tamanhos
-        tableHTML += `<th class="border p-2">Multiplicador</th>`;
-        
-        // 3. Adiciona a coluna Total
-        tableHTML += `<th class="border p-2">Total</th></tr></thead><tbody>`;
-
-        // --- CORPO DA TABELA (COM ORDEM AJUSTADA) ---
+        tableHTML += `<th class="border p-2">Multiplicador</th><th class="border p-2">Total Linha</th></tr></thead><tbody>`;
         cores.forEach(cor => {
             let rowTotal = 0;
             const multiplicador = multiplicadores[cor] || 1;
-            tableHTML += `<tr class="border-b">
-                <td class="font-semibold p-2 border-r">${cor}</td>`;
-            
-            // 1. Adiciona as caixas de quantidade de Tamanho PRIMEIRO
+            tableHTML += `<tr class="border-b"><td class="font-semibold p-2 border-r">${cor}</td>`;
             tamanhos.forEach(tamanho => {
                 const qty = (grade[cor] && grade[cor][tamanho] !== undefined) ? grade[cor][tamanho] : 0;
                 rowTotal += qty * multiplicador;
                 tableHTML += `<td class="p-1 border-r"><input type="number" min="0" value="${qty}" class="w-16 text-center border rounded-md grade-qty-input" data-cor="${cor}" data-tamanho="${tamanho}"></td>`;
             });
-
-            // 2. Adiciona a caixa do Multiplicador DEPOIS dos tamanhos
-            tableHTML += `
-                <td class="p-1 border-r">
-                    <input type="number" min="1" value="${multiplicador}" class="w-20 text-center border rounded-md multiplier-input" data-cor="${cor}">
-                </td>`;
-
-            // 3. Adiciona a célula de Total da linha
+            tableHTML += `<td class="p-1 border-r"><input type="number" min="1" value="${multiplicador}" class="w-20 text-center border rounded-md multiplier-input" data-cor="${cor}"></td>`;
             tableHTML += `<td class="font-bold p-2">${rowTotal}</td></tr>`;
             grandTotal += rowTotal;
         });
-
-        // --- RODAPÉ DA TABELA (colspan não precisa de mudança) ---
-        tableHTML += `</tbody><tfoot class="bg-gray-100 font-bold"><tr class="border-t-2">
-            <td colspan="${2 + tamanhos.length}" class="text-right p-2">Total de Peças no Pack:</td>
-            <td class="p-2">${grandTotal}</td>
-        </tr></tfoot></table>`;
+        tableHTML += `</tbody><tfoot class="bg-gray-100 font-bold"><tr class="border-t-2"><td colspan="${tamanhos.length + 2}" class="text-right p-2">Total de Peças no Pack:</td><td class="p-2">${grandTotal}</td></tr></tfoot></table>`;
         packContentContainer.innerHTML = tableHTML;
     }
 
     function hideModal() {
         gradeModal.classList.add('hidden');
-        modalState = {};
+        modalState = { productIndex: null, packIndex: null, gradeDetails: {} };
     }
 
-    // --- EVENT LISTENERS ---
+    // --- 4. EVENT LISTENERS ---
     addItemBtn.addEventListener('click', addProductItems);
+    productMultiSelect.addEventListener('dblclick', addProductItems);
+
     productSearchInput.addEventListener('keyup', function() {
         const searchTerm = this.value.toLowerCase();
         Array.from(productMultiSelect.options).forEach(option => {
@@ -478,96 +490,136 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    itensTableBody.addEventListener('click', (e) => {
-        // Remover produto
-        let btn = e.target.closest('.remove-product-btn');
-        if (btn) {
-            itensDoPedido.splice(btn.dataset.productIndex, 1);
-            renderizarTabela();
-            return;
-        }
-        // Adicionar pack
-        btn = e.target.closest('.add-new-pack-btn');
-        if (btn) {
-            addNewPackToProduct(itensDoPedido[btn.dataset.productIndex]);
-            renderizarTabela();
-            return;
-        }
-        // Apagar pack
-        btn = e.target.closest('.delete-pack-btn');
-        if (btn) {
-            const product = itensDoPedido[btn.dataset.productIndex];
-            if (product.packs.length > 1) {
-                product.packs.splice(btn.dataset.packIndex, 1);
-                // Renumerar packs
-                product.packs.forEach((p, i) => p.pack_num = i + 1);
-                renderizarTabela();
-            } else {
-                alert("Não é possível remover o último pack.");
-            }
-            return;
-        }
-        // Abrir modal
-        btn = e.target.closest('.open-grade-modal-btn');
-        if (btn) {
-            openGradeModal(parseInt(btn.dataset.productIndex), parseInt(btn.dataset.packIndex));
-            return;
-        }
-    });
-
-    itensTableBody.addEventListener('input', (e) => {
-        // Custo
+    itensTableBody.addEventListener('change', (e) => {
         if (e.target.classList.contains('cost-input')) {
-            const product = itensDoPedido[e.target.dataset.productIndex];
-            product.custo = parseFloat(e.target.value.replace('R$ ', '').replace(',', '.')) || 0;
+            const productIndex = e.target.dataset.productIndex;
+            const product = itensDoPedido[productIndex];
+            let cleanValue = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+            product.custo = parseFloat(cleanValue) || 0;
+            renderizarTabela();
         }
-        // Distribuição por filial
         if (e.target.classList.contains('filial-dist-input')) {
             const { productIndex, packIndex, filialCodigo } = e.target.dataset;
             const pack = itensDoPedido[productIndex].packs[packIndex];
             pack.filialDistribution[filialCodigo] = parseInt(e.target.value) || 0;
+            renderizarTabela();
         }
-        renderizarTabela(); // Re-renderiza para atualizar todos os totais
     });
 
-    // Modal Listeners
+    itensTableBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        const packRow = e.target.closest('.toggle-pack');
+        const productRow = e.target.closest('.toggle-product');
+
+        if (btn) {
+            if (btn.classList.contains('add-new-pack-btn')) {
+                addNewPackToProduct(itensDoPedido[btn.dataset.productIndex]);
+                renderizarTabela();
+            } else if (btn.classList.contains('remove-product-btn')) {
+                if(confirm('Tem certeza que deseja remover este produto e todos os seus packs?')) {
+                    itensDoPedido.splice(btn.dataset.productIndex, 1);
+                    renderizarTabela();
+                }
+            } else if (btn.classList.contains('delete-pack-btn')) {
+                const product = itensDoPedido[btn.dataset.productIndex];
+                if (product.packs.length > 1) {
+                    product.packs.splice(btn.dataset.packIndex, 1);
+                    product.packs.forEach((p, i) => p.pack_num = i + 1);
+                    renderizarTabela();
+                } else {
+                    alert("Não é possível remover o último pack de um produto. Remova o produto inteiro.");
+                }
+            } else if (btn.classList.contains('duplicate-pack-btn')) {
+                const productIndex = btn.dataset.productIndex;
+                const packIndex = parseInt(btn.dataset.packIndex);
+                const product = itensDoPedido[productIndex];
+                const originalPack = product.packs[packIndex];
+                const duplicatedPack = JSON.parse(JSON.stringify(originalPack));
+                product.packs.splice(packIndex + 1, 0, duplicatedPack);
+                product.packs.forEach((p, i) => p.pack_num = i + 1);
+                renderizarTabela();
+            } else if (btn.classList.contains('open-grade-modal-btn')) {
+                openGradeModal(parseInt(btn.dataset.productIndex), parseInt(btn.dataset.packIndex));
+            }
+        } else if (packRow && !e.target.closest('input')) {
+            const { productIndex, packIndex } = packRow.dataset;
+            itensDoPedido[productIndex].packs[packIndex].isExpanded = !itensDoPedido[productIndex].packs[packIndex].isExpanded;
+            renderizarTabela();
+        } else if (productRow && !e.target.closest('input')) {
+            const { productIndex } = productRow.dataset;
+            itensDoPedido[productIndex].isExpanded = !itensDoPedido[productIndex].isExpanded;
+            renderizarTabela();
+        }
+    });
+
     closeModalBtn.addEventListener('click', hideModal);
     cancelModalBtn.addEventListener('click', hideModal);
     
     saveGradeBtn.addEventListener('click', () => {
         const { productIndex, packIndex } = modalState;
-        itensDoPedido[productIndex].packs[packIndex].gradeDetails = JSON.parse(JSON.stringify(modalState.gradeDetails));
-        hideModal();
-        renderizarTabela();
+        if (productIndex !== null && packIndex !== null) {
+            itensDoPedido[productIndex].packs[packIndex].gradeDetails = JSON.parse(JSON.stringify(modalState.gradeDetails));
+            hideModal();
+            renderizarTabela();
+        }
     });
 
     packContentContainer.addEventListener('input', (e) => {
         const { gradeDetails } = modalState;
-        if (e.target.classList.contains('multiplier-input')) {
+        if (e.target.classList.contains('simple-grade-qty')) {
+            gradeDetails.simpleGrade.quantity = parseInt(e.target.value) || 0;
+        } else if (e.target.classList.contains('simple-grade-multiplier')) {
+            gradeDetails.simpleGrade.multiplier = parseInt(e.target.value) || 1;
+        } else if (e.target.classList.contains('multiplier-input')) {
             gradeDetails.multiplicadores[e.target.dataset.cor] = parseInt(e.target.value) || 1;
-        }
-        if (e.target.classList.contains('grade-qty-input')) {
+        } else if (e.target.classList.contains('grade-qty-input')) {
             const { cor, tamanho } = e.target.dataset;
             gradeDetails.grade[cor][tamanho] = parseInt(e.target.value) || 0;
         }
-        renderModalContent(); // Re-renderiza o conteúdo do modal para atualizar totais
+        renderModalContent();
     });
     
     form.addEventListener('submit', function(e) {
         atualizarTotaisEJson();
         if (JSON.parse(hiddenJsonInput.value).length === 0) {
             e.preventDefault();
-            alert('O pedido deve ter pelo menos um item com quantidade distribuída.');
+            alert('O pedido deve ter pelo menos um item com quantidade distribuída para ser salvo.');
         }
     });
     
-    // --- INICIALIZAÇÃO ---
-    let flatItensFromServer = {{ itens_pedido | tojson | safe }};
-    // A lógica para carregar itens existentes (`agruparItensIniciais`) precisaria ser
-    // completamente reescrita para suportar a nova estrutura hierárquica.
-    // Por enquanto, esta parte focará no cadastro de novos pedidos.
+    // --- 5. INICIALIZAÇÃO DA PÁGINA ---
+    const preselectedItemsJSON = sessionStorage.getItem('preselectedOrderItems');
+    if (preselectedItemsJSON) {
+        console.log("Itens pré-selecionados encontrados no sessionStorage. Carregando...");
+        sessionStorage.removeItem('preselectedOrderItems');
+        try {
+            const itemsFromStorage = JSON.parse(preselectedItemsJSON);
+            itensDoPedido = prepararItensDoServidor(itemsFromStorage);
+        } catch(e) {
+            console.error("Falha ao processar itens do sessionStorage:", e);
+            itensDoPedido = [];
+        }
+    } else {
+        console.log("Nenhum item pré-selecionado. Verificando dados do servidor (modo de edição).");
+        let rawDataFromServer = {{ itens_pedido | tojson | safe }};
+        let itensProcessados = [];
+        try {
+            if (typeof rawDataFromServer === 'string' && rawDataFromServer.trim() !== "") {
+                itensProcessados = JSON.parse(rawDataFromServer);
+            } else if (Array.isArray(rawDataFromServer)) {
+                itensProcessados = rawDataFromServer;
+            }
+        } catch (e) {
+            console.error("CRÍTICO: Falha ao fazer o parse do JSON recebido do servidor.", e);
+            itensProcessados = [];
+        }
+        if (Array.isArray(itensProcessados) && itensProcessados.length > 0) {
+            itensDoPedido = prepararItensDoServidor(itensProcessados);
+        }
+    }
+    
+    console.log("Chamando renderizarTabela() para exibir os itens na página.");
     renderizarTabela();
 });
 </script>
-
 {% endblock %}

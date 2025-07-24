@@ -5,169 +5,244 @@
 {% block content %}
 <div class="container mx-auto">
     <h1 class="text-3xl font-bold text-gray-800 mb-6">
-        {% if produto %}Editar Produto #{{ produto.prd_codigo }}{% else %}Cadastrar Novo Produto{% endif %}
+        {% if produto %}Editar Produto{% else %}Cadastrar Novo Produto{% endif %}
     </h1>
 
-    <form id="form-produto" action="{{ url_for('editar_produto', sec_codigo=produto.sec_codigo, esp_codigo=produto.esp_codigo, prd_codigo=produto.prd_codigo) if produto else url_for('cadastrar_produto') }}" method="POST">
-        <!-- Campos Chave -->
-        <input type="hidden" name="prd_data_cadastro" value="{{ produto.prd_data_cadastro.strftime('%Y-%m-%d') if produto and produto.prd_data_cadastro else '' }}">
-        
+    <form id="form-produto" method="POST" action="{{ url_for('cadastrar_produto') }}">
         <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Informações Principais</h2>
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Identificação do Produto</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
                     <label for="sec_codigo" class="block text-sm font-medium text-gray-700">Seção*</label>
-                    <input type="number" name="sec_codigo" id="sec_codigo" value="{{ produto.sec_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
+                    <select name="sec_codigo" id="sec_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
                 <div>
                     <label for="esp_codigo" class="block text-sm font-medium text-gray-700">Espécie*</label>
-                    <input type="number" name="esp_codigo" id="esp_codigo" value="{{ produto.esp_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
-                </div>
-                 <div>
-                    <label for="prd_codigo" class="block text-sm font-medium text-gray-700">Produto Cód.*</label>
-                    <input type="number" name="prd_codigo" id="prd_codigo" value="{{ produto.prd_codigo if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm {% if produto %}bg-gray-100{% endif %}" {% if produto %}readonly{% endif %}>
-                </div>
-                <div class="lg:col-span-2">
-                    <label for="prd_descricao" class="block text-sm font-medium text-gray-700">Descrição*</label>
-                    <input type="text" name="prd_descricao" value="{{ produto.prd_descricao if produto else '' }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                 <div>
-                    <label for="mar_codigo" class="block text-sm font-medium text-gray-700">Marca*</label>
-                    <select name="mar_codigo" id="mar_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                        <option value="">Selecione...</option>
-                        {% for m in marcas %}
-                        <option value="{{ m.mar_codigo }}" {% if produto and m.mar_codigo == produto.mar_codigo %}selected{% endif %}>{{ m.mar_descricao }}</option>
-                        {% endfor %}
+                    <select name="esp_codigo" id="esp_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled>
+                        <option value="">Selecione uma seção primeiro</option>
                     </select>
                 </div>
                 <div>
-                    <label for="prd_referencia_fornec" class="block text-sm font-medium text-gray-700">Referência</label>
-                    <input type="text" name="prd_referencia_fornec" value="{{ produto.prd_referencia_fornec if produto else '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <label for="mar_codigo" class="block text-sm font-medium text-gray-700">Marca*</label>
+                    <select name="mar_codigo" id="mar_codigo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
-                 <div class="flex items-center mt-6">
-                    <input id="prd_ativo" name="prd_ativo" type="checkbox" {% if not produto or produto.prd_ativo %}checked{% endif %} value="1" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
-                    <label for="prd_ativo" class="ml-2 block text-sm text-gray-900">Ativo</label>
+                <div class="lg:col-span-2">
+                    <label for="prd_descricao" class="block text-sm font-medium text-gray-700">Descrição*</label>
+                    <input type="text" name="prd_descricao" id="prd_descricao" required maxlength="50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="prd_descricao_reduzida" class="block text-sm font-medium text-gray-700">Descrição Reduzida*</label>
+                    <input type="text" name="prd_descricao_reduzida" id="prd_descricao_reduzida" required maxlength="50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="prd_referencia_fornec" class="block text-sm font-medium text-gray-700">Referência do Fornecedor*</label>
+                    <input type="text" name="prd_referencia_fornec" id="prd_referencia_fornec" required maxlength="50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <p id="ref-error" class="text-red-500 text-xs mt-1 hidden">Esta Marca/Referência já existe.</p>
+                </div>
+                <div>
+                    <label for="prd_codigo_original" class="block text-sm font-medium text-gray-700">Código Original</label>
+                    <input type="number" name="prd_codigo_original" id="prd_codigo_original" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
             </div>
         </div>
 
-        <!-- Seção da Grade de Itens -->
-        <div class="bg-white p-6 rounded-xl shadow-md">
-             <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Grade de Itens (Cor, Tamanho, etc.)</h2>
-             <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end p-4 border rounded-lg mb-4 bg-gray-50">
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Detalhes e Configurações</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
-                    <label for="item-ipr-codigo" class="block text-sm font-medium text-gray-700">Cód. Item (ipr)*</label>
-                    <input type="number" id="item-ipr-codigo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <label for="usu_codigo_comprador" class="block text-sm font-medium text-gray-700">Comprador</label>
+                    <select name="usu_codigo_comprador" id="usu_codigo_comprador" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
                 <div>
-                    <label for="item-codigo-barra" class="block text-sm font-medium text-gray-700">Código de Barras</label>
-                    <input type="text" id="item-codigo-barra" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <label for="und_codigo" class="block text-sm font-medium text-gray-700">Unidade</label>
+                    <select name="und_codigo" id="und_codigo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
                 <div>
-                    <label for="item-preco-promo" class="block text-sm font-medium text-gray-700">Preço Promocional</label>
-                    <input type="number" step="0.01" id="item-preco-promo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <label for="clf_codigo" class="block text-sm font-medium text-gray-700">Classificação Fiscal</label>
+                    <select name="clf_codigo" id="clf_codigo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
                 <div>
-                    <button type="button" id="add-grade-item-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Adicionar à Grade</button>
+                    <label for="prd_origem" class="block text-sm font-medium text-gray-700">Origem</label>
+                    <select name="prd_origem" id="prd_origem" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
-             </div>
-             <div class="overflow-x-auto">
-                <table class="min-w-full leading-normal">
-                    <thead>
-                        <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">
-                            <th class="px-5 py-3">Cód. Item</th>
-                            <th class="px-5 py-3">Cód. Barras</th>
-                            <th class="px-5 py-3">Preço Promo</th>
-                            <th class="px-5 py-3">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="grade-table-body"></tbody>
-                </table>
-             </div>
-             <input type="hidden" name="itens_grade_json" id="itens_grade_json">
+                <div>
+                    <label for="etq_codigo_padrao" class="block text-sm font-medium text-gray-700">Etiqueta Padrão</label>
+                    <select name="etq_codigo_padrao" id="etq_codigo_padrao" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                </div>
+                <div class="flex items-center pt-6">
+                    <input id="prd_ativo" name="prd_ativo" type="checkbox" checked value="1" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                    <label for="prd_ativo" class="ml-2 block text-sm text-gray-900">Produto Ativo</label>
+                </div>
+            </div>
         </div>
+        
+        <div id="atributos-container" class="bg-white p-6 rounded-xl shadow-md mb-6 hidden">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Atributos Específicos</h2>
+            <div id="atributos-dinamicos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+        </div>
+
 
         <div class="mt-8 pt-5 border-t border-gray-200 flex justify-end gap-4">
             <a href="{{ url_for('visualizar_produtos') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancelar</a>
-            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
-                {% if produto %}Atualizar Produto{% else %}Salvar Produto{% endif %}
-            </button>
+            <button type="submit" id="submit-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Salvar Produto</button>
         </div>
     </form>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const iprCodigoInput = document.getElementById('item-ipr-codigo');
-    const codigoBarraInput = document.getElementById('item-codigo-barra');
-    const precoPromoInput = document.getElementById('item-preco-promo');
-    const addBtn = document.getElementById('add-grade-item-btn');
-    const tableBody = document.getElementById('grade-table-body');
+    // --- Seleção de Elementos ---
+    const secaoSelect = document.getElementById('sec_codigo');
+    const especieSelect = document.getElementById('esp_codigo');
+    const marcaSelect = document.getElementById('mar_codigo');
+    const compradorSelect = document.getElementById('usu_codigo_comprador');
+    const unidadeSelect = document.getElementById('und_codigo');
+    const clfSelect = document.getElementById('clf_codigo');
+    const origemSelect = document.getElementById('prd_origem');
+    const etiquetaSelect = document.getElementById('etq_codigo_padrao');
+    const descricaoInput = document.getElementById('prd_descricao');
+    const descReduzidaInput = document.getElementById('prd_descricao_reduzida');
+    const referenciaInput = document.getElementById('prd_referencia_fornec');
+    const refError = document.getElementById('ref-error');
+    const atributosContainer = document.getElementById('atributos-container');
+    const atributosGrid = document.getElementById('atributos-dinamicos-grid');
     const form = document.getElementById('form-produto');
-    const hiddenJsonInput = document.getElementById('itens_grade_json');
+    const submitBtn = document.getElementById('submit-btn');
 
-    let itensDaGrade = JSON.parse({{ itens_grade | safe }});
+    // --- Funções Auxiliares ---
+    async function fetchData(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Falha na requisição para ' + url);
+        return response.json();
+    }
 
-    function renderizarTabelaGrade() {
-        tableBody.innerHTML = '';
-        itensDaGrade.forEach(item => {
-            const row = document.createElement('tr');
-            row.classList.add('border-b', 'border-gray-200');
-            row.innerHTML = `
-                <td class="px-5 py-4 text-sm">${item.ipr_codigo}</td>
-                <td class="px-5 py-4 text-sm">${item.ipr_codigo_barra || ''}</td>
-                <td class="px-5 py-4 text-sm">${item.ipr_preco_promocional != null ? 'R$ ' + parseFloat(item.ipr_preco_promocional).toFixed(2) : ''}</td>
-                <td class="px-5 py-4 text-sm">
-                    <button type="button" onclick="removerItemGrade(${item.ipr_codigo})" class="text-red-500 hover:text-red-700">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </td>
-            `;
-            tableBody.appendChild(row);
+    function populateSelect(selectElement, data, valueField, textField, displayFormat = 'default') {
+        selectElement.innerHTML = '<option value="">Selecione...</option>';
+        data.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item[valueField];
+            if (displayFormat === 'clf') {
+                option.textContent = `${item[textField[0]]} - ${item[textField[1]]}`;
+            } else if (Array.isArray(textField)) {
+                option.textContent = `${item[textField[0]]} - ${item[textField[1]]}`;
+            } else {
+                option.textContent = item[textField];
+            }
+            selectElement.appendChild(option);
         });
-        hiddenJsonInput.value = JSON.stringify(itensDaGrade);
     }
 
-    addBtn.addEventListener('click', function() {
-        const ipr_codigo = parseInt(iprCodigoInput.value);
-        if (isNaN(ipr_codigo)) {
-            alert('O Código do Item (ipr) é obrigatório e deve ser um número.');
-            return;
+    // --- Carregamento Inicial de Dados ---
+    async function initializeForm() {
+        try {
+            const data = await fetchData('/api/produtos/form_data');
+            populateSelect(secaoSelect, data.secoes, 'sec_codigo', ['sec_codigo', 'sec_descricao']);
+            populateSelect(marcaSelect, data.marcas, 'mar_codigo', ['mar_codigo', 'mar_descricao']);
+            populateSelect(compradorSelect, data.compradores, 'usu_codigo', ['usu_codigo', 'usu_login']);
+            populateSelect(unidadeSelect, data.unidades, 'und_codigo', ['und_codigo', 'und_descricao']);
+            populateSelect(clfSelect, data.classificacoes_fiscais, 'clf_codigo', ['clf_codigo_fiscal', 'clf_descricao'], 'clf');
+            populateSelect(origemSelect, data.origens, 'codigo', 'descricao');
+            populateSelect(etiquetaSelect, data.etiquetas, 'etq_codigo', ['etq_codigo', 'etq_descricao']);
+        } catch (error) {
+            console.error("Erro ao inicializar formulário:", error);
+            alert("Não foi possível carregar os dados para o formulário.");
         }
-        if (itensDaGrade.find(i => i.ipr_codigo === ipr_codigo)) {
-            alert('Este código de item já foi adicionado à grade.');
-            return;
-        }
-
-        const newItem = {
-            ipr_codigo: ipr_codigo,
-            ipr_codigo_barra: codigoBarraInput.value,
-            ipr_preco_promocional: precoPromoInput.value ? parseFloat(precoPromoInput.value) : null
-        };
-        
-        itensDaGrade.push(newItem);
-        renderizarTabelaGrade();
-        
-        iprCodigoInput.value = '';
-        codigoBarraInput.value = '';
-        precoPromoInput.value = '';
-    });
-
-    window.removerItemGrade = function(ipr_codigo) {
-        itensDaGrade = itensDaGrade.filter(item => item.ipr_codigo !== ipr_codigo);
-        renderizarTabelaGrade();
     }
 
-    form.addEventListener('submit', function(e) {
-        hiddenJsonInput.value = JSON.stringify(itensDaGrade);
-        if (itensDaGrade.length === 0) {
-            e.preventDefault();
-            alert('O produto deve ter pelo menos um item na grade.');
+    // --- Lógica de Eventos ---
+
+    // 1. Carregar Espécies ao selecionar Seção
+    secaoSelect.addEventListener('change', async () => {
+        const secCodigo = secaoSelect.value;
+        especieSelect.innerHTML = '<option value="">Carregando...</option>';
+        especieSelect.disabled = true;
+        atributosContainer.classList.add('hidden');
+        if (!secCodigo) {
+            especieSelect.innerHTML = '<option value="">Selecione uma seção primeiro</option>';
             return;
+        }
+        try {
+            const especies = await fetchData(`/api/especies_por_secao/${secCodigo}`);
+            populateSelect(especieSelect, especies, 'esp_codigo', ['esp_codigo', 'esp_descricao']);
+            especieSelect.disabled = false;
+        } catch (error) {
+            console.error("Erro ao buscar espécies:", error);
+            especieSelect.innerHTML = '<option value="">Erro ao carregar</option>';
         }
     });
 
-    renderizarTabelaGrade();
+    // 2. Carregar Atributos ao selecionar Espécie
+    especieSelect.addEventListener('change', async () => {
+        const secCodigo = secaoSelect.value;
+        const espCodigo = especieSelect.value;
+        atributosGrid.innerHTML = '';
+        if (!secCodigo || !espCodigo) {
+            atributosContainer.classList.add('hidden');
+            return;
+        }
+        try {
+            const atributos = await fetchData(`/api/atributos_por_especie/${secCodigo}/${espCodigo}`);
+            if (atributos.length > 0) {
+                atributos.forEach(attr => {
+                    // Aqui você criaria os selects para cada atributo permitido
+                    // Esta parte é complexa e depende da sua estrutura de `tb_atributo_produto`
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <label for="attr_${attr.tpa_codigo}" class="block text-sm font-medium text-gray-700">${attr.tpa_descricao}</label>
+                        <select name="attr_${attr.tpa_codigo}" id="attr_${attr.tpa_codigo}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                            <option value="">Selecione...</option>
+                            </select>`;
+                    atributosGrid.appendChild(div);
+                });
+                atributosContainer.classList.remove('hidden');
+            } else {
+                atributosContainer.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error("Erro ao buscar atributos:", error);
+        }
+    });
+
+    // 3. Duplicar Descrição
+    descricaoInput.addEventListener('input', () => {
+        descReduzidaInput.value = descricaoInput.value;
+    });
+
+    // 4. Validar Marca/Referência
+    let debounceTimer;
+    async function validateReference() {
+        const marCodigo = marcaSelect.value;
+        const ref = referenciaInput.value.trim();
+        refError.classList.add('hidden');
+        submitBtn.disabled = false;
+        
+        if (!marCodigo || !ref) return;
+
+        try {
+            const response = await fetch('/api/produto/validar_existencia', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mar_codigo: marCodigo, prd_referencia_fornec: ref })
+            });
+            const data = await response.json();
+            if (data.existe) {
+                refError.classList.remove('hidden');
+                submitBtn.disabled = true;
+            }
+        } catch (error) {
+            console.error("Erro ao validar referência:", error);
+        }
+    }
+    
+    referenciaInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(validateReference, 500);
+    });
+    marcaSelect.addEventListener('change', validateReference);
+
+    // --- Inicialização ---
+    initializeForm();
 });
 </script>
 {% endblock %}

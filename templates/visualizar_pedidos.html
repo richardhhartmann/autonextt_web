@@ -4,65 +4,291 @@
 
 {% block content %}
 <div class="container mx-auto">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold text-gray-800">Lista de Pedidos</h1>
-        <a href="{{ url_for('cadastrar_pedido') }}" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300 flex items-center">
+    <div class="flex justify-between items-center mb-6 gap-4">
+        <h1 class="text-3xl font-bold text-gray-800 flex-shrink-0">Lista de Pedidos</h1>
+        
+        <div id="bulk-actions-container" class="hidden flex-grow justify-center items-center gap-2">
+             <span id="selection-counter" class="text-sm font-semibold text-gray-600"></span>
+            <button id="bulk-edit-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg shadow-md text-sm">
+                <i class="fas fa-edit mr-1"></i> Editar
+            </button>
+            <button id="bulk-delete-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md text-sm">
+                <i class="fas fa-trash-alt mr-1"></i> Excluir
+            </button>
+        </div>
+
+        <div class="flex-grow mx-4">
+            <input type="search" id="search-box" placeholder="Pesquisar por fornecedor ou código..." class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <a href="{{ url_for('cadastrar_pedido') }}" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300 flex items-center flex-shrink-0">
             <i class="fas fa-plus mr-2"></i>
             Novo Pedido
         </a>
     </div>
 
-    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <div class="bg-white shadow-md rounded-lg">
         <div class="overflow-x-auto">
             <table class="min-w-full leading-normal">
                 <thead>
                     <tr class="border-b-2 border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <th class="px-3 py-3 w-12 text-center">
+                            <input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </th>
                         {% for coluna in colunas %}
                         <th class="px-5 py-3">{{ coluna }}</th>
                         {% endfor %}
                         <th class="px-5 py-3 text-center">Ações</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for linha in dados %}
-                    {% set status = (linha['Status'] or '') | upper %}
-                    {% set row_class = 'hover:bg-gray-100' %}
-                    {% if status == 'D' %}
-                        {% set row_class = 'bg-blue-50 hover:bg-blue-100' %}
-                    {% elif status == 'C' %}
-                        {% set row_class = 'bg-red-50 hover:bg-red-100' %}
-                    {% elif status == 'L' %}
-                        {% set row_class = 'bg-green-50 hover:bg-green-100' %}
-                    {% endif %}
-                    <tr class="border-b border-gray-200 group {{ row_class }}">
-                        {% for coluna in colunas %}
-                        <td class="px-5 py-4 text-sm text-gray-800">
-                            {{ linha[coluna] if linha[coluna] is not none else 'N/A' }}
-                        </td>
-                        {% endfor %}
-                         <td class="px-5 py-4 text-sm text-center">
-                            <div class="opacity-0 group-hover:opacity-100 flex justify-center space-x-3 transition-opacity">
-                                <a href="{{ url_for('editar_pedido', ped_codigo=linha['Código']) }}" class="text-blue-600 hover:text-blue-900" title="Editar">
-                                    <i class="fas fa-edit fa-lg"></i>
-                                </a>
-                                <form action="{{ url_for('excluir_pedido', ped_codigo=linha['Código']) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este pedido?');">
-                                    <button type="submit" class="text-red-600 hover:text-red-900" title="Excluir">
-                                        <i class="fas fa-trash-alt fa-lg"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="{{ colunas|length + 1 }}" class="text-center py-10 text-gray-500">
-                            Nenhum pedido encontrado.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="pedidos-table-body">
+                    </tbody>
             </table>
+        </div>
+        <div id="loading-indicator" class="text-center p-4 hidden">
+            <i class="fas fa-spinner fa-spin fa-2x text-gray-500"></i>
+            <p>Carregando mais pedidos...</p>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- SELEÇÃO DE ELEMENTOS DO DOM ---
+    const tableBody = document.getElementById('pedidos-table-body');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const searchBox = document.getElementById('search-box');
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
+    const bulkActionsContainer = document.getElementById('bulk-actions-container');
+    const selectionCounter = document.getElementById('selection-counter');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    const bulkEditBtn = document.getElementById('bulk-edit-btn');
+    
+    // --- ESTADO DA APLICAÇÃO ---
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+    let currentSearch = '';
+    let searchTimeout;
+    let selectedOrders = new Set(); // Armazena os IDs dos pedidos selecionados
+
+    const colunas = {{ colunas | tojson }};
+
+    function getStatusClass(status) {
+        switch (status) {
+            case 'Pendente':
+                return 'bg-yellow-50';
+            case 'Em andamento':
+                return 'bg-blue-50';
+            case 'Concluído':
+                return 'bg-green-50';
+            case 'Cancelado':
+                return 'bg-red-50';
+            default:
+                return '';
+        }
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return 'N/A';
+        const date = new Date(dateStr);
+        if (isNaN(date)) return dateStr; // Caso não seja uma data válida
+        return date.toLocaleDateString('pt-BR');
+    }
+
+    function createTableRow(pedido) {
+        const row = document.createElement('tr');
+        const statusClass = getStatusClass(pedido['Status']);
+        row.className = `border-b border-gray-200 group ${statusClass}`;
+
+        let cells = `
+            <td class="px-3 py-4 text-center">
+                <input type="checkbox" class="row-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded" data-order-id="${pedido['Código']}">
+            </td>
+        `;
+
+        colunas.forEach(colunaKey => {
+            let cellValue = pedido[colunaKey];
+            if (colunaKey === 'Entrega Inicial' || colunaKey === 'Entrega Final') {
+                cellValue = formatDate(cellValue);
+            } else if (colunaKey === 'Valor Total' && cellValue !== null) {
+                cellValue = parseFloat(cellValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            } else {
+                cellValue = cellValue !== null ? cellValue : 'N/A';
+            }
+            cells += `<td class="px-5 py-4 text-sm text-gray-800">${cellValue}</td>`;
+        });
+
+        const editUrl = `/pedidos/editar/${pedido['Código']}`;
+        const deleteUrl = `/pedidos/excluir/${pedido['Código']}`;
+
+        cells += `
+            <td class="px-5 py-4 text-sm text-center">
+                <div class="opacity-0 group-hover:opacity-100 flex justify-center space-x-3 transition-opacity">
+                    <a href="${editUrl}" class="text-blue-600 hover:text-blue-900" title="Editar">
+                        <i class="fas fa-edit fa-lg"></i>
+                    </a>
+                    <form action="${deleteUrl}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este pedido?');">
+                        <button type="submit" class="text-red-600 hover:text-red-900" title="Excluir">
+                            <i class="fas fa-trash-alt fa-lg"></i>
+                        </button>
+                    </form>
+                </div>
+            </td>
+        `;
+
+        row.innerHTML = cells;
+        return row;
+    }
+
+    async function fetchPedidos(page = 1, search = '') {
+        if (isLoading || !hasMore) return;
+        isLoading = true;
+        loadingIndicator.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/pedidos?page=${page}&search=${search}`);
+            if (!response.ok) {
+                throw new Error('Falha ao carregar os dados.');
+            }
+            const pedidos = await response.json();
+
+            if (page === 1) {
+                tableBody.innerHTML = '';
+                selectedOrders.clear();
+                updateBulkActionsUI();
+            }
+
+            if (pedidos.length > 0) {
+                pedidos.forEach(pedido => {
+                    tableBody.appendChild(createTableRow(pedido));
+                });
+                currentPage++;
+            } else {
+                hasMore = false;
+                if (page === 1) {
+                    tableBody.innerHTML = `<tr><td colspan="${colunas.length + 1}" class="text-center py-10 text-gray-500">Nenhum pedido encontrado.</td></tr>`;
+                }
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            tableBody.innerHTML = `<tr><td colspan="${colunas.length + 1}" class="text-center py-10 text-red-500">Erro ao carregar pedidos.</td></tr>`;
+        } finally {
+            isLoading = false;
+            loadingIndicator.classList.add('hidden');
+        }
+    }
+
+    function updateBulkActionsUI() {
+        const selectionCount = selectedOrders.size;
+        if (selectionCount > 0) {
+            bulkActionsContainer.classList.remove('hidden');
+            selectionCounter.textContent = `${selectionCount} selecionado(s)`;
+        } else {
+            bulkActionsContainer.classList.add('hidden');
+        }
+        const totalCheckboxes = document.querySelectorAll('.row-checkbox').length;
+        selectAllCheckbox.checked = (selectionCount > 0 && selectionCount === totalCheckboxes);
+    }
+
+    tableBody.addEventListener('change', function(e) {
+        if (e.target.classList.contains('row-checkbox')) {
+            const orderId = parseInt(e.target.dataset.orderId);
+            if (e.target.checked) {
+                selectedOrders.add(orderId);
+            } else {
+                selectedOrders.delete(orderId);
+            }
+            updateBulkActionsUI();
+        }
+    });
+
+    selectAllCheckbox.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.row-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+            const orderId = parseInt(checkbox.dataset.orderId);
+            if (this.checked) {
+                selectedOrders.add(orderId);
+            } else {
+                selectedOrders.delete(orderId);
+            }
+        });
+        updateBulkActionsUI();
+    });
+
+    bulkDeleteBtn.addEventListener('click', async function() {
+        const selectionCount = selectedOrders.size;
+        if (selectionCount === 0) return;
+
+        if (confirm(`Tem certeza que deseja excluir os ${selectionCount} pedidos selecionados?`)) {
+            const ordersToDelete = Array.from(selectedOrders);
+            
+            try {
+                const response = await fetch('/api/pedidos/bulk-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_ids: ordersToDelete })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.success);
+                    currentPage = 1;
+                    hasMore = true;
+                    fetchPedidos(currentPage, currentSearch);
+                } else {
+                    throw new Error(result.error || 'Erro desconhecido');
+                }
+            } catch (error) {
+                alert(`Erro ao excluir: ${error.message}`);
+            }
+        }
+    });
+
+    bulkEditBtn.addEventListener('click', function() {
+        alert('A funcionalidade de edição em massa ainda não foi implementada.');
+    });
+
+    function findScrollableParent(element) {
+        let parent = element.parentElement;
+        while (parent) {
+            const style = window.getComputedStyle(parent);
+            if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                return parent;
+            }
+            if (parent.tagName === 'BODY') break;
+            parent = parent.parentElement;
+        }
+        return window;
+    }
+
+    const scrollContainer = findScrollableParent(tableBody);
+
+    scrollContainer.addEventListener('scroll', () => {
+        let isAtBottom;
+        if (scrollContainer === window) {
+            isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.offsetHeight - 100;
+        } else {
+            isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 100;
+        }
+
+        if (isAtBottom && hasMore && !isLoading) {
+            fetchPedidos(currentPage, currentSearch);
+        }
+    });
+
+    fetchPedidos(currentPage, currentSearch);
+
+    searchBox.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearch = e.target.value;
+            currentPage = 1;
+            hasMore = true;
+            fetchPedidos(currentPage, currentSearch);
+        }, 500); // 500ms debounce
+    });
+});
+</script>
 {% endblock %}
